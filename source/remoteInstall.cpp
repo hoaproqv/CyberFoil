@@ -1833,7 +1833,7 @@ namespace remoteInstStuff {
                 for (const char* ik : idKeys) {
                     if (entry.contains(ik) && entry[ik].is_string()) {
                         std::uint64_t tid = 0;
-                        if (inst::util::TryParseTitleIdText(entry[ik].get<std::string>(), tid)) {
+                        if (TryParseTitleIdText(entry[ik].get<std::string>(), tid)) {
                             item.titleId = tid;
                             item.hasTitleId = true;
                             InferAppTypeFromTitleId(tid, item.appType);
@@ -2216,7 +2216,7 @@ namespace remoteInstStuff {
                     item.requestHeaders = requestHeaders;
 
                     std::uint64_t parsedTitleId = 0;
-                    if (inst::util::TryParseTitleIdText(item.name, parsedTitleId)) {
+                    if (TryParseTitleIdText(item.name, parsedTitleId)) {
                         item.titleId = parsedTitleId;
                         item.hasTitleId = true;
                         InferAppTypeFromTitleId(parsedTitleId, item.appType);
