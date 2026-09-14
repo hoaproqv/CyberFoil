@@ -578,6 +578,24 @@ namespace {
         return lower.find("<!doctype html") != std::string::npos || lower.find("<html") != std::string::npos;
     }
 
+    bool IsHtmlDirectoryListing(const std::string& body)
+    {
+        std::string lower = body;
+        std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+        if (lower.find(".nsp") != std::string::npos ||
+            lower.find(".nsz") != std::string::npos ||
+            lower.find(".xci") != std::string::npos ||
+            lower.find(".xcz") != std::string::npos) {
+            return true;
+        }
+        if (lower.find("index of ") != std::string::npos ||
+            lower.find("directory listing for") != std::string::npos ||
+            lower.find("autoindex") != std::string::npos) {
+            return true;
+        }
+        return false;
+    }
+
     bool IsLoginUrl(const char* effectiveUrl)
     {
         if (!effectiveUrl)
@@ -596,9 +614,25 @@ namespace {
             if (prefix == "jbod:")
                 return urlPath;
         }
-        if (!urlPath.empty() && urlPath[0] == '/')
-            return baseUrl + urlPath;
-        return baseUrl + "/" + urlPath;
+        if (urlPath.empty())
+            return baseUrl;
+
+        if (urlPath[0] == '/') {
+            std::string origin = GetUrlOrigin(baseUrl);
+            if (!origin.empty())
+                return origin + urlPath;
+            std::string base = baseUrl;
+            while (!base.empty() && base.back() == '/')
+                base.pop_back();
+            return base + urlPath;
+        }
+
+        std::string base = baseUrl;
+        if (base.empty())
+            return urlPath;
+        if (base.back() != '/')
+            base += '/';
+        return base + urlPath;
     }
 
     bool IsGoogleDriveApiUrlWithoutKey(const std::string& url)
@@ -1643,6 +1677,11 @@ namespace remoteInstStuff {
             return true;
         }
 
+        if (IsHtmlDirectoryListing(fetch.body)) {
+            LogRemoteDebug("ValidateRemoteResponse: body is an HTML directory listing");
+            return true;
+        }
+
         if (IsLoginUrl(fetch.effectiveUrl.c_str()) || (!fetch.contentType.empty() && fetch.contentType.find("text/html") != std::string::npos) || ContainsHtml(fetch.body)) {
             std::string preview = fetch.body.substr(0, 120);
             for (char& c : preview) {
@@ -1692,6 +1731,18 @@ namespace remoteInstStuff {
                     rawUrl = entry["download_url"].get<std::string>();
                 else if (entry.contains("downloadUrl") && entry["downloadUrl"].is_string())
                     rawUrl = entry["downloadUrl"].get<std::string>();
+                else if (entry.contains("filename") && entry["filename"].is_string())
+                    rawUrl = entry["filename"].get<std::string>();
+                else if (entry.contains("fileName") && entry["fileName"].is_string())
+                    rawUrl = entry["fileName"].get<std::string>();
+                else if (entry.contains("name") && entry["name"].is_string())
+                    rawUrl = entry["name"].get<std::string>();
+                else if (entry.contains("link") && entry["link"].is_string())
+                    rawUrl = entry["link"].get<std::string>();
+                else if (entry.contains("href") && entry["href"].is_string())
+                    rawUrl = entry["href"].get<std::string>();
+                else if (entry.contains("uri") && entry["uri"].is_string())
+                    rawUrl = entry["uri"].get<std::string>();
             } else {
                 return false;
             }
@@ -1700,13 +1751,21 @@ namespace remoteInstStuff {
                 return false;
 
             std::uint64_t size = 0;
-            if (entry.is_object() && entry.contains("size")) {
-                if (entry["size"].is_number_unsigned())
-                    size = entry["size"].get<std::uint64_t>();
-                else if (entry["size"].is_number_integer()) {
-                    const auto parsedSize = entry["size"].get<long long>();
-                    if (parsedSize > 0)
-                        size = static_cast<std::uint64_t>(parsedSize);
+            if (entry.is_object()) {
+                static const char* sizeKeys[] = {"size", "file_size", "fileSize", "length", "bytes"};
+                for (const char* sk : sizeKeys) {
+                    if (entry.contains(sk)) {
+                        if (entry[sk].is_number_unsigned()) {
+                            size = entry[sk].get<std::uint64_t>();
+                            break;
+                        } else if (entry[sk].is_number_integer()) {
+                            const auto ps = entry[sk].get<long long>();
+                            if (ps > 0) {
+                                size = static_cast<std::uint64_t>(ps);
+                                break;
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1742,6 +1801,15 @@ namespace remoteInstStuff {
             if (entry.is_object() && entry.contains("name") && entry["name"].is_string() &&
                 !TrimAscii(entry["name"].get<std::string>()).empty()) {
                 name = TrimAscii(entry["name"].get<std::string>());
+            } else if (entry.is_object() && entry.contains("filename") && entry["filename"].is_string() &&
+                !TrimAscii(entry["filename"].get<std::string>()).empty()) {
+                name = TrimAscii(entry["filename"].get<std::string>());
+            } else if (entry.is_object() && entry.contains("fileName") && entry["fileName"].is_string() &&
+                !TrimAscii(entry["fileName"].get<std::string>()).empty()) {
+                name = TrimAscii(entry["fileName"].get<std::string>());
+            } else if (entry.is_object() && entry.contains("title") && entry["title"].is_string() &&
+                !TrimAscii(entry["title"].get<std::string>()).empty()) {
+                name = TrimAscii(entry["title"].get<std::string>());
             } else if (!fragment.empty()) {
                 name = DecodeUrlSegment(fragment);
             } else {
@@ -1759,6 +1827,33 @@ namespace remoteInstStuff {
             item.googleDriveWithoutApiKey = (urlPath.rfind("gdrive:", 0) == 0 && googleApiKey.empty()) ||
                 IsGoogleDriveApiUrlWithoutKey(fullUrl);
             ApplyLegacyMetadataFromName(name, item);
+
+            if (entry.is_object()) {
+                static const char* idKeys[] = {"id", "title_id", "titleId"};
+                for (const char* ik : idKeys) {
+                    if (entry.contains(ik) && entry[ik].is_string()) {
+                        std::uint64_t tid = 0;
+                        if (inst::util::TryParseTitleIdText(entry[ik].get<std::string>(), tid)) {
+                            item.titleId = tid;
+                            item.hasTitleId = true;
+                            InferAppTypeFromTitleId(tid, item.appType);
+                            break;
+                        }
+                    }
+                }
+                if (entry.contains("version")) {
+                    if (entry["version"].is_number_unsigned()) {
+                        item.appVersion = entry["version"].get<std::uint32_t>();
+                        item.hasAppVersion = true;
+                    } else if (entry["version"].is_number_integer()) {
+                        const auto pv = entry["version"].get<long long>();
+                        if (pv >= 0) {
+                            item.appVersion = static_cast<std::uint32_t>(pv);
+                            item.hasAppVersion = true;
+                        }
+                    }
+                }
+            }
 
             std::uint32_t releaseDate = 0;
             if (entry.is_object() && TryParseReleaseDate(entry, releaseDate)) {
@@ -1864,17 +1959,38 @@ namespace remoteInstStuff {
                     any = AppendRemoteItemFromEntry(normalized, baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error) || any;
                     if (!error.empty())
                         return false;
+                } else if (value.is_number()) {
+                    std::uint64_t sz = 0;
+                    if (value.is_number_unsigned())
+                        sz = value.get<std::uint64_t>();
+                    else if (value.is_number_integer() && value.get<long long>() > 0)
+                        sz = static_cast<std::uint64_t>(value.get<long long>());
+                    nlohmann::json normalized = {
+                        {"name", key},
+                        {"url", key},
+                        {"size", sz}
+                    };
+                    any = AppendRemoteItemFromEntry(normalized, baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error) || any;
+                    if (!error.empty())
+                        return false;
                 } else if (value.is_array()) {
                     for (const auto& sub : value) {
-                        if (!sub.is_string())
-                            continue;
-                        nlohmann::json normalized = {
-                            {"name", key},
-                            {"url", sub.get<std::string>()}
-                        };
-                        any = AppendRemoteItemFromEntry(normalized, baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error) || any;
-                        if (!error.empty())
-                            return false;
+                        if (sub.is_object()) {
+                            nlohmann::json normalized = sub;
+                            if ((!normalized.contains("name") || !normalized["name"].is_string()) && !key.empty())
+                                normalized["name"] = key;
+                            any = AppendRemoteItemFromEntry(normalized, baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error) || any;
+                            if (!error.empty())
+                                return false;
+                        } else if (sub.is_string()) {
+                            nlohmann::json normalized = {
+                                {"name", key},
+                                {"url", sub.get<std::string>()}
+                            };
+                            any = AppendRemoteItemFromEntry(normalized, baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error) || any;
+                            if (!error.empty())
+                                return false;
+                        }
                     }
                 }
             }
@@ -1991,6 +2107,141 @@ namespace remoteInstStuff {
                     return entry[key].get<std::string>();
             }
             return "";
+        }
+
+        std::string UrlDecode(const std::string& in)
+        {
+            std::string out;
+            out.reserve(in.size());
+            for (std::size_t i = 0; i < in.size(); ++i) {
+                if (in[i] == '%' && i + 2 < in.size()) {
+                    int h1 = HexNibble(in[i + 1]);
+                    int h2 = HexNibble(in[i + 2]);
+                    if (h1 >= 0 && h2 >= 0) {
+                        out.push_back(static_cast<char>((h1 << 4) | h2));
+                        i += 2;
+                        continue;
+                    }
+                } else if (in[i] == '+') {
+                    out.push_back(' ');
+                    continue;
+                }
+                out.push_back(in[i]);
+            }
+            return out;
+        }
+
+        bool AppendHtmlDirectoryListing(const std::string& html, const std::string& dirUrl,
+            const std::vector<std::string>& requestHeaders,
+            std::vector<RemoteItem>& items, std::unordered_set<std::string>& seenItemUrls,
+            std::unordered_set<std::string>& seenManifestUrls,
+            const std::string& user, const std::string& pass,
+            const RemoteFetchProgressCallback& progressCb, int depth = 0)
+        {
+            if (depth > 2)
+                return false;
+
+            bool any = false;
+            std::vector<std::string> subdirs;
+            std::size_t pos = 0;
+
+            while (pos < html.size()) {
+                std::size_t aTag = html.find("<a", pos);
+                if (aTag == std::string::npos) break;
+                std::size_t aTagEnd = html.find(">", aTag);
+                if (aTagEnd == std::string::npos) break;
+                std::size_t aClose = html.find("</a>", aTagEnd);
+                std::string linkText;
+                if (aClose != std::string::npos) {
+                    linkText = html.substr(aTagEnd + 1, aClose - (aTagEnd + 1));
+                    pos = aClose + 4;
+                } else {
+                    pos = aTagEnd + 1;
+                }
+
+                std::string tagContent = html.substr(aTag, aTagEnd - aTag);
+                std::size_t hrefPos = tagContent.find("href=");
+                if (hrefPos == std::string::npos) continue;
+                hrefPos += 5;
+                if (hrefPos >= tagContent.size()) continue;
+                char quote = tagContent[hrefPos];
+                std::string href;
+                if (quote == '"' || quote == '\'') {
+                    hrefPos++;
+                    std::size_t endQuote = tagContent.find(quote, hrefPos);
+                    if (endQuote != std::string::npos)
+                        href = tagContent.substr(hrefPos, endQuote - hrefPos);
+                } else {
+                    std::size_t endSpace = tagContent.find_first_of(" >", hrefPos);
+                    href = tagContent.substr(hrefPos, endSpace - hrefPos);
+                }
+
+                if (href.empty() || href[0] == '?' || href[0] == '#') continue;
+                if (href == "../" || href == ".." || href == "./" || href == "/") continue;
+
+                std::string decodedHref = UrlDecode(href);
+                std::string lowerHref = decodedHref;
+                std::transform(lowerHref.begin(), lowerHref.end(), lowerHref.begin(), [](unsigned char c) { return std::tolower(c); });
+
+                bool isPackage = (lowerHref.size() >= 4 && (
+                    lowerHref.rfind(".nsp") == lowerHref.size() - 4 ||
+                    lowerHref.rfind(".nsz") == lowerHref.size() - 4 ||
+                    lowerHref.rfind(".xci") == lowerHref.size() - 4 ||
+                    lowerHref.rfind(".xcz") == lowerHref.size() - 4
+                ));
+
+                if (isPackage) {
+                    std::string fullUrl = BuildFullUrl(dirUrl, href);
+                    if (fullUrl.empty()) continue;
+                    if (!seenItemUrls.insert(fullUrl).second) continue;
+
+                    std::string fname = decodedHref;
+                    auto slash = fname.find_last_of("/\\");
+                    if (slash != std::string::npos) fname = fname.substr(slash + 1);
+
+                    std::string cleanText;
+                    bool inTag = false;
+                    for (char c : linkText) {
+                        if (c == '<') inTag = true;
+                        else if (c == '>') inTag = false;
+                        else if (!inTag) cleanText.push_back(c);
+                    }
+                    cleanText = TrimAscii(cleanText);
+
+                    RemoteItem item;
+                    item.name = (!cleanText.empty() && cleanText.find('.') != std::string::npos) ? cleanText : fname;
+                    item.url = fullUrl;
+                    item.indexSourceUrl = dirUrl;
+                    item.size = 0;
+                    item.requestHeaders = requestHeaders;
+
+                    std::uint64_t parsedTitleId = 0;
+                    if (inst::util::TryParseTitleIdText(item.name, parsedTitleId)) {
+                        item.titleId = parsedTitleId;
+                        item.hasTitleId = true;
+                        InferAppTypeFromTitleId(parsedTitleId, item.appType);
+                    }
+
+                    ApplyLegacyMetadataFromName(item.name, item);
+                    ApplyOfflineDataToItem(item, true);
+                    items.push_back(std::move(item));
+                    any = true;
+                } else if (href.back() == '/' && depth < 2) {
+                    std::string subUrl = BuildFullUrl(dirUrl, href);
+                    if (!subUrl.empty() && seenManifestUrls.insert(subUrl).second) {
+                        subdirs.push_back(subUrl);
+                    }
+                }
+            }
+
+            for (const auto& sub : subdirs) {
+                FetchResult subFetch = FetchRemoteResponse(sub, user, pass, progressCb);
+                if (subFetch.responseCode >= 200 && subFetch.responseCode < 300 && !subFetch.body.empty()) {
+                    any = AppendHtmlDirectoryListing(subFetch.body, sub, requestHeaders, items, seenItemUrls, seenManifestUrls, user, pass, progressCb, depth + 1) || any;
+                }
+            }
+
+            return any;
         }
 
         bool ApplyCustomIndexLocations(const nlohmann::json& locations, std::string& error)
@@ -2136,6 +2387,14 @@ namespace remoteInstStuff {
                 LogRemoteDebug("CollectRemoteItemsFromJson: remote is not an object");
                 return false;
             }
+
+            std::string keysSummary;
+            for (auto it = remote.begin(); it != remote.end(); ++it) {
+                if (!keysSummary.empty()) keysSummary += ", ";
+                keysSummary += it.key();
+            }
+            LogRemoteDebug("CollectRemoteItemsFromJson: top-level keys = [" + keysSummary + "]");
+
             if (!ValidateCustomIndexOptions(remote, error))
                 return false;
             if (remote.contains("error") && remote["error"].is_string()) {
@@ -2191,18 +2450,24 @@ namespace remoteInstStuff {
                 }
             }
 
-            if (remote.contains("files")) {
-                if (AppendLegacyFilesFromJson(remote["files"], baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error))
-                    handled = true;
-                else if (!error.empty())
-                    return false;
+            static const std::vector<std::string> kFileCandidateKeys = {
+                "files", "paths", "games", "updates", "dlc", "items",
+                "entries", "packages", "data", "list", "content",
+                "nsps", "xci", "xcis", "nsz", "tfl"
+            };
+            for (const auto& k : kFileCandidateKeys) {
+                if (remote.contains(k)) {
+                    LogRemoteDebug("CollectRemoteItemsFromJson: checking key '" + k + "'");
+                    if (AppendLegacyFilesFromJson(remote[k], baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error)) {
+                        handled = true;
+                        LogRemoteDebug("CollectRemoteItemsFromJson: key '" + k + "' added items, total now: " + std::to_string(items.size()));
+                    } else if (!error.empty()) {
+                        LogRemoteDebug("CollectRemoteItemsFromJson: key '" + k + "' returned error: " + error);
+                        return false;
+                    }
+                }
             }
-            if (remote.contains("paths")) {
-                if (AppendLegacyFilesFromJson(remote["paths"], baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error))
-                    handled = true;
-                else if (!error.empty())
-                    return false;
-            }
+
             if (remote.contains("titledb")) {
                 if (AppendLegacyTitleDbFromJson(remote["titledb"], baseUrl, items, seenItemUrls))
                     handled = true;
@@ -2210,6 +2475,7 @@ namespace remoteInstStuff {
 
             if (remote.contains("directories") && remote["directories"].is_array()) {
                 handled = true;
+                LogRemoteDebug("CollectRemoteItemsFromJson: scanning " + std::to_string(remote["directories"].size()) + " directories");
                 for (const auto& directoryEntry : remote["directories"]) {
                     const std::string directoryPath = GetDirectoryEntryUrl(directoryEntry);
                     if (directoryPath.empty())
@@ -2231,23 +2497,78 @@ namespace remoteInstStuff {
                         continue;
                     }
 
-                    nlohmann::json directoryJson;
+                    bool dirHandled = false;
                     try {
-                        directoryJson = nlohmann::json::parse(directoryFetch.body);
+                        nlohmann::json directoryJson = nlohmann::json::parse(directoryFetch.body);
+                        std::string dirCollectError;
+                        dirHandled = CollectRemoteItemsFromJson(directoryJson, directoryUrl, user, pass, items, seenItemUrls, seenManifestUrls,
+                            dirCollectError, progressCb, googleApiKey, credentialOrigin, requestHeaders);
                     } catch (...) {
-                        LogRemoteDebug("Skipping directory " + directoryUrl + " json parse failed");
-                        continue;
+                        dirHandled = false;
                     }
 
-                    std::string dirCollectError;
-                    CollectRemoteItemsFromJson(directoryJson, directoryUrl, user, pass, items, seenItemUrls, seenManifestUrls,
-                        dirCollectError, progressCb, googleApiKey, credentialOrigin, requestHeaders);
+                    if (!dirHandled || items.empty()) {
+                        if (AppendHtmlDirectoryListing(directoryFetch.body, directoryUrl, requestHeaders, items, seenItemUrls, seenManifestUrls, user, pass, progressCb)) {
+                            LogRemoteDebug("Directory " + directoryUrl + " parsed as HTML directory listing, total items: " + std::to_string(items.size()));
+                        }
+                    }
                 }
             }
 
-            if (!handled && items.empty()) {
-                error = "Remote response missing file list.";
-                LogRemoteDebug("CollectRemoteItemsFromJson: missing file list and no items");
+            if (items.empty() && remote.contains("locations") && remote["locations"].is_array()) {
+                LogRemoteDebug("CollectRemoteItemsFromJson: items empty, trying locations as directories");
+                for (const auto& location : remote["locations"]) {
+                    std::string locUrl;
+                    if (location.is_string()) {
+                        locUrl = location.get<std::string>();
+                    } else if (location.is_object() && location.contains("url") && location["url"].is_string()) {
+                        std::string action = location.value("action", "add");
+                        if (action != "disable") {
+                            locUrl = location["url"].get<std::string>();
+                        }
+                    }
+                    if (locUrl.empty()) continue;
+                    const std::string fullLocUrl = BuildFullUrl(baseUrl, locUrl);
+                    if (fullLocUrl.empty() || !seenManifestUrls.insert(fullLocUrl).second) continue;
+
+                    const bool sameCredentialOrigin = !credentialOrigin.empty() &&
+                        GetUrlOrigin(fullLocUrl) == credentialOrigin;
+                    FetchResult locFetch = FetchRemoteResponse(
+                        fullLocUrl, sameCredentialOrigin ? user : "", sameCredentialOrigin ? pass : "", progressCb);
+                    std::string locErr;
+                    if (!ValidateRemoteResponse(locFetch, locErr)) continue;
+
+                    try {
+                        nlohmann::json locJson = nlohmann::json::parse(locFetch.body);
+                        std::string subErr;
+                        CollectRemoteItemsFromJson(locJson, fullLocUrl, user, pass, items, seenItemUrls, seenManifestUrls,
+                            subErr, progressCb, googleApiKey, credentialOrigin, requestHeaders);
+                    } catch (...) {
+                        AppendHtmlDirectoryListing(locFetch.body, fullLocUrl, requestHeaders, items, seenItemUrls, seenManifestUrls, user, pass, progressCb);
+                    }
+                }
+            }
+
+            if (items.empty() && remote.is_object()) {
+                for (auto it = remote.begin(); it != remote.end(); ++it) {
+                    const std::string& k = it.key();
+                    if (k == "success" || k == "error" || k == "locations" || k == "headers" ||
+                        k == "themeBlackList" || k == "themeWhiteList" || k == "oneFichierKeys" ||
+                        k == "googleApiKey" || k == "clientCertPub" || k == "clientCertKey" ||
+                        k == "version" || k == "referrer" || k == "themeError" || k == "directories") {
+                        continue;
+                    }
+                    const auto& v = it.value();
+                    if (v.is_array() || v.is_object()) {
+                        LogRemoteDebug("CollectRemoteItemsFromJson: fallback parse on key '" + k + "'");
+                        AppendLegacyFilesFromJson(v, baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error);
+                    }
+                }
+            }
+
+            if (items.empty()) {
+                error = "Remote catalog returned 0 games. Top keys: [" + keysSummary + "]. See sdmc:/switch/CyberFoil/remote_debug.log";
+                LogRemoteDebug("CollectRemoteItemsFromJson: " + error);
                 return false;
             }
 
@@ -2271,24 +2592,31 @@ namespace remoteInstStuff {
         if (!ValidateRemoteResponse(fetch, error))
             return items;
 
+        std::unordered_set<std::string> seenItemUrls;
+        std::unordered_set<std::string> seenManifestUrls;
+        seenManifestUrls.insert(baseUrl);
+
         try {
             nlohmann::json remote = nlohmann::json::parse(fetch.body);
-            std::unordered_set<std::string> seenItemUrls;
-            std::unordered_set<std::string> seenManifestUrls;
-            seenManifestUrls.insert(baseUrl);
-            if (!CollectRemoteItemsFromJson(remote, baseUrl, user, pass, items, seenItemUrls, seenManifestUrls,
-                error, progressCb, "", GetUrlOrigin(baseUrl)))
-                return items;
+            CollectRemoteItemsFromJson(remote, baseUrl, user, pass, items, seenItemUrls, seenManifestUrls,
+                error, progressCb, "", GetUrlOrigin(baseUrl));
         }
         catch (const std::exception& e) {
-            error = std::string("Invalid Remote JSON: ") + e.what();
-            LogRemoteDebug("FetchRemote json parse exception: " + error);
-            return {};
+            LogRemoteDebug(std::string("FetchRemote: JSON parse exception: ") + e.what() + ", trying HTML directory listing");
         }
         catch (...) {
-            error = "Invalid Remote response.";
-            LogRemoteDebug("FetchRemote unknown exception");
-            return {};
+            LogRemoteDebug("FetchRemote: JSON parse unknown exception, trying HTML directory listing");
+        }
+
+        if (items.empty()) {
+            if (AppendHtmlDirectoryListing(fetch.body, baseUrl, {}, items, seenItemUrls, seenManifestUrls, user, pass, progressCb)) {
+                error.clear();
+                LogRemoteDebug("FetchRemote: root parsed as HTML directory listing, total items: " + std::to_string(items.size()));
+            }
+        }
+
+        if (items.empty() && error.empty()) {
+            error = "Remote returned 0 games. Check sdmc:/switch/CyberFoil/remote_debug.log";
         }
 
         std::sort(items.begin(), items.end(), [](const RemoteItem& a, const RemoteItem& b) {

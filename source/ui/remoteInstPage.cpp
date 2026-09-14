@@ -3964,7 +3964,8 @@ namespace inst::ui {
         }
         if (this->remoteSections.empty()) {
             RemoteDlcTrace("FetchRemoteSections returned empty sections");
-            mainApp->CreateShowDialog("inst.remote.empty"_lang, "", {"common.ok"_lang}, true);
+            std::string emptyDetail = error.empty() ? "Remote returned 0 games.\nCheck sdmc:/switch/CyberFoil/remote_debug.log" : error;
+            mainApp->CreateShowDialog("inst.remote.empty"_lang, emptyDetail, {"common.ok"_lang}, true);
             mainApp->LoadLayout(mainApp->mainPage);
             return;
         }
