@@ -401,7 +401,7 @@ namespace {
         return true;
     }
 
-    bool TryUnwrapLegacyAesKey(const std::uint8_t* wrappedKey, std::vector<std::uint8_t>& outAesKey)
+    [[maybe_unused]] bool TryUnwrapLegacyAesKey(const std::uint8_t* wrappedKey, std::vector<std::uint8_t>& outAesKey)
     {
         outAesKey.clear();
         if (wrappedKey == nullptr)

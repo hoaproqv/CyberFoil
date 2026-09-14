@@ -15,6 +15,7 @@
 #include "ui/instPage.hpp"
 #include "remoteInstall.hpp"
 #include "ui/bottomHint.hpp"
+#include "util/uid.hpp"
 
 #define COLOR(hex) pu::ui::Color::FromHex(hex)
 
