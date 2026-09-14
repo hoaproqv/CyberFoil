@@ -52,6 +52,17 @@ namespace inst::ui {
 namespace {
     std::string gRemoteApiPrefix = "/api/remote";
 
+    void LogRemoteDebug(const std::string& line)
+    {
+        std::error_code ec;
+        std::filesystem::create_directories("sdmc:/switch/CyberFoil", ec);
+        FILE* f = fopen("sdmc:/switch/CyberFoil/remote_debug.log", "a");
+        if (f) {
+            fprintf(f, "%s\n", line.c_str());
+            fclose(f);
+        }
+    }
+
     std::string FormatOneDecimal(double value)
     {
         char buf[32];
@@ -269,20 +280,18 @@ namespace {
         std::string languageHeader = "Language: " + Language::GetRemoteHeaderLanguage();
         std::string uidHeader = "UID: " + inst::util::ComputeUidFromMmcCid();
 
+        std::string hauthHeader = "HAUTH: " + inst::util::ComputeHauthFromUrl(requestUrl);
+        std::string uauthHeader = "UAUTH: " + inst::util::ComputeUauthFromUrl(requestUrl, user, pass);
+
         std::vector<std::string> headers = {
             themeHeader,
             uidHeader,
             versionHeader,
             revisionHeader,
-            languageHeader
+            languageHeader,
+            hauthHeader,
+            uauthHeader
         };
-
-        if (inst::util::HasLegacyAuthSupport()) {
-            std::string hauthHeader = "HAUTH: " + inst::util::ComputeHauthFromUrl(requestUrl);
-            std::string uauthHeader = "UAUTH: " + inst::util::ComputeUauthFromUrl(requestUrl, user, pass);
-            headers.push_back(hauthHeader);
-            headers.push_back(uauthHeader);
-        }
 
         return headers;
     }
@@ -1535,6 +1544,16 @@ namespace remoteInstStuff {
             result.effectiveUrl = effectiveUrl ? effectiveUrl : "";
             result.contentType = contentType ? contentType : "";
 
+            {
+                std::string preview = result.body.substr(0, 200);
+                for (char& c : preview) {
+                    if (c == '\r' || c == '\n') c = ' ';
+                }
+                LogRemoteDebug("Fetch: url=" + url + " rc=" + std::to_string(responseCode) +
+                    " ct=" + result.contentType + " bytes=" + std::to_string(result.body.size()) +
+                    " preview=" + preview);
+            }
+
             if (rc != CURLE_OK) {
                 result.error = std::string(curl_easy_strerror(rc)) + " (curl=" + std::to_string(static_cast<int>(rc)) + ")";
             } else if (progressCb) {
@@ -1568,6 +1587,7 @@ namespace remoteInstStuff {
     {
         if (!fetch.error.empty()) {
             error = fetch.error;
+            LogRemoteDebug("ValidateRemoteResponse: curl error=" + error);
             return false;
         }
         if (fetch.responseCode == 401 || fetch.responseCode == 403) {
@@ -1576,25 +1596,67 @@ namespace remoteInstStuff {
             } else {
                 error = "Remote requires authentication. Check credentials or enable public Remote.";
             }
+            LogRemoteDebug("ValidateRemoteResponse: auth error=" + error);
             return false;
         }
         if (!fetch.decodeError.empty()) {
             error = fetch.decodeError;
+            LogRemoteDebug("ValidateRemoteResponse: decodeError=" + error);
             return false;
         }
         std::size_t legacyOffset = std::string::npos;
         if (FindLegacyPayloadOffset(fetch.body, legacyOffset)) {
             error = "Encrypted Remote response could not be decoded.";
+            LogRemoteDebug("ValidateRemoteResponse: encrypted legacy payload not decoded");
             return false;
         }
+
+        // Check whether body is valid JSON.
+        // A valid JSON catalog must never be rejected just because Content-Type contains text/html
+        // or because a string field in the JSON (such as MOTD, release notes, or descriptions) contains HTML tags.
+        bool bodyIsJson = false;
+        try {
+            std::size_t start = 0;
+            if (fetch.body.size() >= 3 &&
+                static_cast<unsigned char>(fetch.body[0]) == 0xEF &&
+                static_cast<unsigned char>(fetch.body[1]) == 0xBB &&
+                static_cast<unsigned char>(fetch.body[2]) == 0xBF) {
+                start = 3;
+            }
+            while (start < fetch.body.size() &&
+                   (fetch.body[start] == ' ' || fetch.body[start] == '\t' ||
+                    fetch.body[start] == '\r' || fetch.body[start] == '\n')) {
+                start++;
+            }
+            if (start < fetch.body.size() && (fetch.body[start] == '{' || fetch.body[start] == '[')) {
+                auto parsed = nlohmann::json::parse(fetch.body);
+                if (parsed.is_object() || parsed.is_array()) {
+                    bodyIsJson = true;
+                }
+            }
+        } catch (...) {
+            bodyIsJson = false;
+        }
+
+        if (bodyIsJson) {
+            LogRemoteDebug("ValidateRemoteResponse: body parsed successfully as JSON");
+            return true;
+        }
+
         if (IsLoginUrl(fetch.effectiveUrl.c_str()) || (!fetch.contentType.empty() && fetch.contentType.find("text/html") != std::string::npos) || ContainsHtml(fetch.body)) {
+            std::string preview = fetch.body.substr(0, 120);
+            for (char& c : preview) {
+                if (c == '\r' || c == '\n') c = ' ';
+            }
             if (inst::config::remoteLegacyMode && !inst::util::HasLegacyAuthSupport()) {
-                error = "This build does not support this Remote";
+                error = "Remote returned non-JSON response (HTTP " + std::to_string(fetch.responseCode) + "): " + preview;
             } else {
                 error = "Remote returned the login page. Check Remote URL, username, and password, or enable public Remote.";
             }
+            LogRemoteDebug("ValidateRemoteResponse: non-JSON/login error=" + error);
             return false;
         }
+        LogRemoteDebug("ValidateRemoteResponse: OK");
         return true;
     }
 
@@ -2065,14 +2127,20 @@ namespace remoteInstStuff {
             std::string& error, const RemoteFetchProgressCallback& progressCb, const std::string& inheritedGoogleApiKey = "",
             const std::string& credentialOrigin = "", const std::vector<std::string>& inheritedRequestHeaders = {})
         {
+            if (remote.is_array()) {
+                LogRemoteDebug("CollectRemoteItemsFromJson: top-level JSON is an array with " + std::to_string(remote.size()) + " elements");
+                return AppendLegacyFilesFromJson(remote, baseUrl, inheritedGoogleApiKey, inheritedRequestHeaders, items, seenItemUrls, error);
+            }
             if (!remote.is_object()) {
                 error = "Invalid Remote response.";
+                LogRemoteDebug("CollectRemoteItemsFromJson: remote is not an object");
                 return false;
             }
             if (!ValidateCustomIndexOptions(remote, error))
                 return false;
             if (remote.contains("error") && remote["error"].is_string()) {
                 error = remote["error"].get<std::string>();
+                LogRemoteDebug("CollectRemoteItemsFromJson: remote contains error: " + error);
                 return false;
             }
 
@@ -2157,28 +2225,33 @@ namespace remoteInstStuff {
                         GetUrlOrigin(directoryUrl) == credentialOrigin;
                     FetchResult directoryFetch = FetchRemoteResponse(
                         directoryUrl, sameCredentialOrigin ? user : "", sameCredentialOrigin ? pass : "", progressCb);
-                    if (!ValidateRemoteResponse(directoryFetch, error))
-                        return false;
+                    std::string dirError;
+                    if (!ValidateRemoteResponse(directoryFetch, dirError)) {
+                        LogRemoteDebug("Skipping directory " + directoryUrl + " validation failed: " + dirError);
+                        continue;
+                    }
 
                     nlohmann::json directoryJson;
                     try {
                         directoryJson = nlohmann::json::parse(directoryFetch.body);
                     } catch (...) {
-                        error = "Invalid Remote response.";
-                        return false;
+                        LogRemoteDebug("Skipping directory " + directoryUrl + " json parse failed");
+                        continue;
                     }
 
-                    if (!CollectRemoteItemsFromJson(directoryJson, directoryUrl, user, pass, items, seenItemUrls, seenManifestUrls,
-                        error, progressCb, googleApiKey, credentialOrigin, requestHeaders))
-                        return false;
+                    std::string dirCollectError;
+                    CollectRemoteItemsFromJson(directoryJson, directoryUrl, user, pass, items, seenItemUrls, seenManifestUrls,
+                        dirCollectError, progressCb, googleApiKey, credentialOrigin, requestHeaders);
                 }
             }
 
-            if (!handled) {
+            if (!handled && items.empty()) {
                 error = "Remote response missing file list.";
+                LogRemoteDebug("CollectRemoteItemsFromJson: missing file list and no items");
                 return false;
             }
 
+            LogRemoteDebug("CollectRemoteItemsFromJson: finished with " + std::to_string(items.size()) + " items");
             return true;
         }
     }
@@ -2207,8 +2280,14 @@ namespace remoteInstStuff {
                 error, progressCb, "", GetUrlOrigin(baseUrl)))
                 return items;
         }
+        catch (const std::exception& e) {
+            error = std::string("Invalid Remote JSON: ") + e.what();
+            LogRemoteDebug("FetchRemote json parse exception: " + error);
+            return {};
+        }
         catch (...) {
             error = "Invalid Remote response.";
+            LogRemoteDebug("FetchRemote unknown exception");
             return {};
         }
 
