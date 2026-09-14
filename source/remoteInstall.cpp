@@ -260,9 +260,6 @@ namespace {
 
     std::vector<std::string> BuildLegacyHeaders(const std::string& requestUrl, const std::string& user, const std::string& pass)
     {
-        if (!inst::util::HasLegacyAuthSupport())
-            return {};
-
         std::string themeHeader = "Theme: 0000000000000000000000000000000000000000000000000000000000000000";
         std::string versionValue;
         std::string revisionValue;
@@ -270,18 +267,24 @@ namespace {
         std::string versionHeader = "Version: " + versionValue;
         std::string revisionHeader = "Revision: " + revisionValue;
         std::string languageHeader = "Language: " + Language::GetRemoteHeaderLanguage();
-        std::string hauthHeader = "HAUTH: " + inst::util::ComputeHauthFromUrl(requestUrl);
-        std::string uauthHeader = "UAUTH: " + inst::util::ComputeUauthFromUrl(requestUrl, user, pass);
         std::string uidHeader = "UID: " + inst::util::ComputeUidFromMmcCid();
-        return {
+
+        std::vector<std::string> headers = {
             themeHeader,
             uidHeader,
             versionHeader,
             revisionHeader,
-            languageHeader,
-            hauthHeader,
-            uauthHeader
+            languageHeader
         };
+
+        if (inst::util::HasLegacyAuthSupport()) {
+            std::string hauthHeader = "HAUTH: " + inst::util::ComputeHauthFromUrl(requestUrl);
+            std::string uauthHeader = "UAUTH: " + inst::util::ComputeUauthFromUrl(requestUrl, user, pass);
+            headers.push_back(hauthHeader);
+            headers.push_back(uauthHeader);
+        }
+
+        return headers;
     }
 
     constexpr std::size_t kLegacyHeaderSize = 0x110;

@@ -327,21 +327,19 @@ namespace tin::network
             useBasicAuth ? g_basic_auth_pass : "");
         headerList = curl_slist_append(headerList, hauthHeader.c_str());
         headerList = curl_slist_append(headerList, uauthHeader.c_str());
-        if (!legacyRequest) {
-            std::string versionValue;
-            std::string revisionValue;
-            BuildVersionAndRevision(versionValue, revisionValue);
-            const std::string themeHeader = "Theme: 0000000000000000000000000000000000000000000000000000000000000000";
-            const std::string uidHeader = "UID: " + inst::util::ComputeUidFromMmcCid();
-            const std::string versionHeader = "Version: " + versionValue;
-            const std::string revisionHeader = "Revision: " + revisionValue;
-            const std::string languageHeader = "Language: " + Language::GetRemoteHeaderLanguage();
-            headerList = curl_slist_append(headerList, themeHeader.c_str());
-            headerList = curl_slist_append(headerList, languageHeader.c_str());
-            headerList = curl_slist_append(headerList, uidHeader.c_str());
-            headerList = curl_slist_append(headerList, versionHeader.c_str());
-            headerList = curl_slist_append(headerList, revisionHeader.c_str());
-        }
+        std::string versionValue;
+        std::string revisionValue;
+        BuildVersionAndRevision(versionValue, revisionValue);
+        const std::string themeHeader = "Theme: 0000000000000000000000000000000000000000000000000000000000000000";
+        const std::string uidHeader = "UID: " + inst::util::ComputeUidFromMmcCid();
+        const std::string versionHeader = "Version: " + versionValue;
+        const std::string revisionHeader = "Revision: " + revisionValue;
+        const std::string languageHeader = "Language: " + Language::GetRemoteHeaderLanguage();
+        headerList = curl_slist_append(headerList, themeHeader.c_str());
+        headerList = curl_slist_append(headerList, languageHeader.c_str());
+        headerList = curl_slist_append(headerList, uidHeader.c_str());
+        headerList = curl_slist_append(headerList, versionHeader.c_str());
+        headerList = curl_slist_append(headerList, revisionHeader.c_str());
         for (const auto& header : requestHeaders)
             headerList = curl_slist_append(headerList, header.c_str());
         if (headerList)

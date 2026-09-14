@@ -522,7 +522,9 @@ namespace inst::ui {
             auto items = this->menu->GetItems();
             if (inst::config::remoteLegacyMode && items.size() > 3 && items[3] != nullptr)
                 items[3]->SetColor(COLOR("#FFFFFF88"));
-            addItem("Tinfoil Mode (legacy Remote compatibility)", true, inst::config::remoteLegacyMode);
+            const std::string consoleUid = inst::util::ComputeUidFromMmcCid();
+            const std::string shortUid = consoleUid.size() >= 8 ? consoleUid.substr(0, 8) : consoleUid;
+            addItem("Tinfoil Mode [ID: " + shortUid + "]", true, inst::config::remoteLegacyMode);
             addItem("options.menu_items.remote_hide_installed"_lang, true, inst::config::remoteHideInstalled);
             addItem("options.menu_items.remote_hide_installed_section"_lang, true, inst::config::remoteHideInstalledSection);
             addItem("Hide cheats not matching local build / installed title", true, inst::config::remoteHideIncompatibleCheats);
