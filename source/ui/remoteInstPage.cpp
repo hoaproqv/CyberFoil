@@ -925,9 +925,9 @@ namespace inst::ui {
             if (std::filesystem::exists(inst::config::appDir + "/background.png")) this->SetBackgroundImage(inst::config::appDir + "/background.png");
             else this->SetBackgroundImage("romfs:/images/background.jpg");
         }
-        const auto topColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#170909FF");
-        const auto infoColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#17090980");
-        const auto botColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#17090980");
+        const auto topColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#141210FF");
+        const auto infoColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#14121090");
+        const auto botColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#14121090");
         this->topRect = Rectangle::New(0, 0, 1280, 74, topColor);
         this->infoRect = Rectangle::New(0, 75, 1280, 60, infoColor);
         this->botRect = Rectangle::New(0, 660, 1280, 60, botColor);
@@ -953,9 +953,9 @@ namespace inst::ui {
         this->sdFreeText = TextBlock::New(0, 42, "Free --", 16);
         this->sdFreeText->SetColor(COLOR("#FFFFFFFF"));
         this->sysBarBack = Rectangle::New(0, 30, 180, 6, COLOR("#FFFFFF33"));
-        this->sysBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FF4D4DFF"));
+        this->sysBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FFA500FF"));
         this->sdBarBack = Rectangle::New(0, 30, 180, 6, COLOR("#FFFFFF33"));
-        this->sdBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FF4D4DFF"));
+        this->sdBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FFA500FF"));
         this->netIndicator = Rectangle::New(0, 0, 6, 6, COLOR("#FF3B30FF"), 3);
         this->wifiBar1 = Rectangle::New(0, 0, 4, 4, COLOR("#FFFFFF55"));
         this->wifiBar2 = Rectangle::New(0, 0, 4, 7, COLOR("#FFFFFF55"));
@@ -972,7 +972,7 @@ namespace inst::ui {
         this->loadingBarBack->SetVisible(false);
         this->loadingBarFill = Rectangle::New(260, 540, 0, 14, COLOR("#34C759FF"));
         this->loadingBarFill->SetVisible(false);
-        this->loadingStagesBack = Rectangle::New(220, 208, 840, 276, inst::config::oledMode ? COLOR("#101010CC") : COLOR("#170909CC"));
+        this->loadingStagesBack = Rectangle::New(220, 208, 840, 276, inst::config::oledMode ? COLOR("#101010CC") : COLOR("#1E1914DD"));
         this->loadingStagesBack->SetVisible(false);
         this->loadingStagesText = TextBlock::New(252, 230, "", 24);
         this->loadingStagesText->SetColor(COLOR("#E9FFF2FF"));
@@ -989,13 +989,13 @@ namespace inst::ui {
             this->menu->SetScrollbarColor(COLOR("#FFFFFF66"));
         } else {
             this->menu->SetOnFocusColor(COLOR("#00000033"));
-            this->menu->SetScrollbarColor(COLOR("#17090980"));
+            this->menu->SetScrollbarColor(COLOR("#14121090"));
         }
         this->infoImage = Image::New(34, 90, "romfs:/images/icons/remote-connection-waiting.png");
         this->previewImage = Image::New(900, 230, "romfs:/images/icons/title-placeholder.png");
         this->previewImage->SetWidth(320);
         this->previewImage->SetHeight(320);
-        auto highlightColor = inst::config::oledMode ? COLOR("#FFFFFF66") : COLOR("#FFFFFF33");
+        auto highlightColor = inst::config::oledMode ? COLOR("#FFA00088") : COLOR("#FFA000AA");
         this->gridHighlight = Rectangle::New(0, 0, kGridTileWidth + 8, kGridTileHeight + 8, highlightColor);
         this->gridHighlight->SetVisible(false);
         this->gridImages.reserve(kGridItemsPerPage);
@@ -1044,12 +1044,12 @@ namespace inst::ui {
         this->emptySectionText = TextBlock::New(0, 350, "", 28);
         this->emptySectionText->SetColor(COLOR("#FFFFFFFF"));
         this->emptySectionText->SetVisible(false);
-        this->descriptionRect = Rectangle::New(10, 508, 1260, 142, inst::config::oledMode ? COLOR("#000000CC") : COLOR("#170909CC"));
+        this->descriptionRect = Rectangle::New(10, 508, 1260, 142, inst::config::oledMode ? COLOR("#000000CC") : COLOR("#1E1914DD"));
         this->descriptionRect->SetVisible(false);
         this->descriptionText = TextBlock::New(22, 518, "", 18);
         this->descriptionText->SetColor(COLOR("#FFFFFFFF"));
         this->descriptionText->SetVisible(false);
-        this->descriptionOverlayRect = Rectangle::New(24, 86, 1232, 564, inst::config::oledMode ? COLOR("#000000EE") : COLOR("#170909EE"));
+        this->descriptionOverlayRect = Rectangle::New(24, 86, 1232, 564, inst::config::oledMode ? COLOR("#000000EE") : COLOR("#181512F0"));
         this->descriptionOverlayRect->SetVisible(false);
         this->descriptionOverlayTitleText = TextBlock::New(46, 102, "", 24);
         this->descriptionOverlayTitleText->SetColor(COLOR("#FFFFFFFF"));
@@ -1060,7 +1060,7 @@ namespace inst::ui {
         this->descriptionOverlayHintText = TextBlock::New(46, 618, "B Close    Up/Down Scroll", 18);
         this->descriptionOverlayHintText->SetColor(COLOR("#FFFFFFFF"));
         this->descriptionOverlayHintText->SetVisible(false);
-        this->saveVersionSelectorRect = Rectangle::New(90, 96, 1100, 548, inst::config::oledMode ? COLOR("#000000EE") : COLOR("#170909EE"));
+        this->saveVersionSelectorRect = Rectangle::New(90, 96, 1100, 548, inst::config::oledMode ? COLOR("#000000EE") : COLOR("#181512F0"));
         this->saveVersionSelectorRect->SetVisible(false);
         this->saveVersionSelectorTitleText = TextBlock::New(114, 112, "", 24);
         this->saveVersionSelectorTitleText->SetColor(COLOR("#FFFFFFFF"));
@@ -1071,7 +1071,7 @@ namespace inst::ui {
             this->saveVersionSelectorMenu->SetScrollbarColor(COLOR("#FFFFFF66"));
         } else {
             this->saveVersionSelectorMenu->SetOnFocusColor(COLOR("#00000033"));
-            this->saveVersionSelectorMenu->SetScrollbarColor(COLOR("#17090980"));
+            this->saveVersionSelectorMenu->SetScrollbarColor(COLOR("#14121090"));
         }
         this->saveVersionSelectorMenu->SetVisible(false);
         this->saveVersionSelectorDetailText = TextBlock::New(114, 524, "", 18);
@@ -1346,6 +1346,120 @@ namespace inst::ui {
         return this->remoteSections[this->selectedSectionIndex].items;
     }
 
+    static std::string GetUnifiedSortLabel(int mode) {
+        switch (mode) {
+            case 0:
+                return "Rank / Popularity";
+            case 1:
+                return "Shop Order";
+            case 2:
+                return "Name A-Z";
+            case 3:
+                return "Name Z-A";
+            case 4:
+                return "Date New-Old";
+            case 5:
+                return "Date Old-New";
+            case 6:
+                return "Size Large-Small";
+            case 7:
+                return "Size Small-Large";
+            case 8:
+                return "Title ID";
+            default:
+                return "Rank / Popularity";
+        }
+    }
+
+    static void ExecuteUnifiedSort(std::vector<remoteInstStuff::RemoteItem>& items, int mode) {
+        auto byNameAsc = [](const remoteInstStuff::RemoteItem& a, const remoteInstStuff::RemoteItem& b) {
+            return inst::util::ignoreCaseCompare(a.name, b.name);
+        };
+
+        switch (mode) {
+            case 0: // Rank / Popularity
+                std::stable_sort(items.begin(), items.end(), [&](const auto& a, const auto& b) {
+                    if (a.hasRank && b.hasRank) {
+                        if (a.rank != b.rank)
+                            return a.rank < b.rank;
+                        return a.originalIndex < b.originalIndex;
+                    }
+                    if (a.hasRank != b.hasRank)
+                        return a.hasRank;
+                    if (a.originalIndex != b.originalIndex)
+                        return a.originalIndex < b.originalIndex;
+                    return byNameAsc(a, b);
+                });
+                break;
+            case 1: // Shop Order
+                std::stable_sort(items.begin(), items.end(), [](const auto& a, const auto& b) {
+                    if (a.originalIndex != b.originalIndex)
+                        return a.originalIndex < b.originalIndex;
+                    return inst::util::ignoreCaseCompare(a.name, b.name);
+                });
+                break;
+            case 2: // Name A-Z
+                std::stable_sort(items.begin(), items.end(), byNameAsc);
+                break;
+            case 3: // Name Z-A
+                std::stable_sort(items.begin(), items.end(), [&](const auto& a, const auto& b) {
+                    return byNameAsc(b, a);
+                });
+                break;
+            case 4: // Date New-Old
+                std::stable_sort(items.begin(), items.end(), [&](const auto& a, const auto& b) {
+                    std::uint64_t aKey = 0;
+                    std::uint64_t bKey = 0;
+                    const bool aHasDate = TryGetItemSortDateKey(a, aKey);
+                    const bool bHasDate = TryGetItemSortDateKey(b, bKey);
+                    if (aHasDate != bHasDate)
+                        return aHasDate;
+                    if (aHasDate && bHasDate && aKey != bKey)
+                        return aKey > bKey;
+                    return byNameAsc(a, b);
+                });
+                break;
+            case 5: // Date Old-New
+                std::stable_sort(items.begin(), items.end(), [&](const auto& a, const auto& b) {
+                    std::uint64_t aKey = 0;
+                    std::uint64_t bKey = 0;
+                    const bool aHasDate = TryGetItemSortDateKey(a, aKey);
+                    const bool bHasDate = TryGetItemSortDateKey(b, bKey);
+                    if (aHasDate != bHasDate)
+                        return aHasDate;
+                    if (aHasDate && bHasDate && aKey != bKey)
+                        return aKey < bKey;
+                    return byNameAsc(a, b);
+                });
+                break;
+            case 6: // Size Large-Small
+                std::stable_sort(items.begin(), items.end(), [&](const auto& a, const auto& b) {
+                    if (a.size != b.size)
+                        return a.size > b.size;
+                    return byNameAsc(a, b);
+                });
+                break;
+            case 7: // Size Small-Large
+                std::stable_sort(items.begin(), items.end(), [&](const auto& a, const auto& b) {
+                    if (a.size != b.size)
+                        return a.size < b.size;
+                    return byNameAsc(a, b);
+                });
+                break;
+            case 8: // Title ID
+                std::stable_sort(items.begin(), items.end(), [&](const auto& a, const auto& b) {
+                    if (a.hasTitleId != b.hasTitleId)
+                        return a.hasTitleId;
+                    if (a.hasTitleId && b.hasTitleId && a.titleId != b.titleId)
+                        return a.titleId < b.titleId;
+                    return byNameAsc(a, b);
+                });
+                break;
+            default:
+                break;
+        }
+    }
+
     void remoteInstPage::applyAllSectionSort() {
         if (this->remoteSections.empty())
             return;
@@ -1356,56 +1470,11 @@ namespace inst::ui {
         if (it == this->remoteSections.end())
             return;
 
-        auto byNameAsc = [](const remoteInstStuff::RemoteItem& a, const remoteInstStuff::RemoteItem& b) {
-            return inst::util::ignoreCaseCompare(a.name, b.name);
-        };
-
-        auto byDateAsc = [&](const remoteInstStuff::RemoteItem& a, const remoteInstStuff::RemoteItem& b) {
-            if (a.hasReleaseDate != b.hasReleaseDate)
-                return a.hasReleaseDate;
-            if (a.hasReleaseDate && b.hasReleaseDate && a.releaseDate != b.releaseDate)
-                return a.releaseDate < b.releaseDate;
-            return byNameAsc(a, b);
-        };
-
-        auto byDateDesc = [&](const remoteInstStuff::RemoteItem& a, const remoteInstStuff::RemoteItem& b) {
-            if (a.hasReleaseDate != b.hasReleaseDate)
-                return a.hasReleaseDate;
-            if (a.hasReleaseDate && b.hasReleaseDate && a.releaseDate != b.releaseDate)
-                return a.releaseDate > b.releaseDate;
-            return byNameAsc(a, b);
-        };
-
-        switch (this->allSortMode) {
-            default:
-            case 0:
-                std::sort(it->items.begin(), it->items.end(), byNameAsc);
-                break;
-            case 1:
-                std::sort(it->items.begin(), it->items.end(), [&](const auto& a, const auto& b) {
-                    return byNameAsc(b, a);
-                });
-                break;
-            case 2:
-                std::sort(it->items.begin(), it->items.end(), byDateAsc);
-                break;
-            case 3:
-                std::sort(it->items.begin(), it->items.end(), byDateDesc);
-                break;
-        }
+        ExecuteUnifiedSort(it->items, this->allSortMode);
     }
 
     std::string remoteInstPage::getAllSortModeLabel() const {
-        switch (this->allSortMode) {
-            case 1:
-                return "Name Z-A";
-            case 2:
-                return "Date Old-New";
-            case 3:
-                return "Date New-Old";
-            default:
-                return "Name A-Z";
-        }
+        return GetUnifiedSortLabel(this->allSortMode);
     }
 
     void remoteInstPage::updateSectionText() {
@@ -1562,43 +1631,14 @@ namespace inst::ui {
 
     const char* remoteInstPage::getBrowseSortLabel() const
     {
-        switch (this->browseSortMode) {
-            case BrowseSortMode::DateDesc:
-                return inst::config::remoteLegacyMode ? "Release Date" : "Date";
-            case BrowseSortMode::NameAsc:
-                return "Name";
-            default:
-                return "Remote Order";
-        }
+        static std::string s_browseLabel;
+        s_browseLabel = GetUnifiedSortLabel(static_cast<int>(this->browseSortMode));
+        return s_browseLabel.c_str();
     }
 
     void remoteInstPage::applyBrowseSort()
     {
-        switch (this->browseSortMode) {
-            case BrowseSortMode::NameAsc:
-                std::stable_sort(this->visibleItems.begin(), this->visibleItems.end(), [](const auto& a, const auto& b) {
-                    return inst::util::ignoreCaseCompare(a.name, b.name);
-                });
-                break;
-            case BrowseSortMode::DateDesc:
-                std::stable_sort(this->visibleItems.begin(), this->visibleItems.end(), [](const auto& a, const auto& b) {
-                    std::uint64_t aKey = 0;
-                    std::uint64_t bKey = 0;
-                    const bool aHasDate = TryGetItemSortDateKey(a, aKey);
-                    const bool bHasDate = TryGetItemSortDateKey(b, bKey);
-                    if (aHasDate != bHasDate)
-                        return aHasDate && !bHasDate;
-                    if (aHasDate && bHasDate) {
-                        if (aKey != bKey)
-                            return aKey > bKey;
-                        return inst::util::ignoreCaseCompare(a.name, b.name);
-                    }
-                    return false;
-                });
-                break;
-            default:
-                break;
-        }
+        ExecuteUnifiedSort(this->visibleItems, static_cast<int>(this->browseSortMode));
     }
 
     void remoteInstPage::openSearchDialog()
@@ -1619,59 +1659,34 @@ namespace inst::ui {
         const bool allSection = this->isAllSection();
         std::string details = "Current sort: ";
         details += allSection ? this->getAllSortModeLabel() : this->getBrowseSortLabel();
-        std::vector<std::string> options;
-        if (allSection) {
-            options = {
-                "Name A-Z",
-                "Name Z-A",
-                "Date Old-New",
-                "Date New-Old"
-            };
-        } else {
-            options = {
-                inst::config::remoteLegacyMode ? "Sort by Release Date" : "Sort by Date",
-                "Sort by Name",
-                "Use Remote Order"
-            };
-        }
-        options.push_back("common.cancel"_lang);
+        std::vector<std::string> options = {
+            "Rank / Popularity",
+            "Shop Order",
+            "Name A-Z",
+            "Name Z-A",
+            "Date New-Old",
+            "Date Old-New",
+            "Size Large-Small",
+            "Size Small-Large",
+            "Title ID",
+            "common.cancel"_lang
+        };
 
         const int choice = mainApp->CreateShowDialog("Sort Remote", details, options, false);
-        if (choice < 0)
+        if (choice < 0 || choice >= 9)
             return;
 
         bool needsRedraw = false;
         if (allSection) {
-            if (choice == 0 && this->allSortMode != 0) {
-                this->allSortMode = 0;
-                this->applyAllSectionSort();
-                needsRedraw = true;
-            } else if (choice == 1 && this->allSortMode != 1) {
-                this->allSortMode = 1;
-                this->applyAllSectionSort();
-                needsRedraw = true;
-            } else if (choice == 2 && this->allSortMode != 2) {
-                this->allSortMode = 2;
-                this->applyAllSectionSort();
-                needsRedraw = true;
-            } else if (choice == 3 && this->allSortMode != 3) {
-                this->allSortMode = 3;
+            if (this->allSortMode != choice) {
+                this->allSortMode = choice;
                 this->applyAllSectionSort();
                 needsRedraw = true;
             }
-        } else if (choice == 0) {
-            if (this->browseSortMode != BrowseSortMode::DateDesc) {
-                this->browseSortMode = BrowseSortMode::DateDesc;
-                needsRedraw = true;
-            }
-        } else if (choice == 1) {
-            if (this->browseSortMode != BrowseSortMode::NameAsc) {
-                this->browseSortMode = BrowseSortMode::NameAsc;
-                needsRedraw = true;
-            }
-        } else if (choice == 2) {
-            if (this->browseSortMode != BrowseSortMode::Default) {
-                this->browseSortMode = BrowseSortMode::Default;
+        } else {
+            auto targetMode = static_cast<BrowseSortMode>(choice);
+            if (this->browseSortMode != targetMode) {
+                this->browseSortMode = targetMode;
                 needsRedraw = true;
             }
         }

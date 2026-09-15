@@ -265,8 +265,8 @@ namespace inst::ui {
             if (std::filesystem::exists(inst::config::appDir + "/background.png")) this->SetBackgroundImage(inst::config::appDir + "/background.png");
             else this->SetBackgroundImage("romfs:/images/background.jpg");
         }
-        const auto topColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#170909FF");
-        const auto botColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#17090980");
+        const auto topColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#141210FF");
+        const auto botColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#14121090");
         this->topRect = Rectangle::New(0, 0, 1280, 74, topColor);
         this->botRect = Rectangle::New(0, 660, 1280, 60, botColor);
         if (inst::config::gayMode) {
@@ -291,9 +291,9 @@ namespace inst::ui {
         this->sdFreeText = TextBlock::New(0, 42, "Free --", 16);
         this->sdFreeText->SetColor(COLOR("#FFFFFFFF"));
         this->sysBarBack = Rectangle::New(0, 30, 180, 6, COLOR("#FFFFFF33"));
-        this->sysBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FF4D4DFF"));
+        this->sysBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FFA500FF"));
         this->sdBarBack = Rectangle::New(0, 30, 180, 6, COLOR("#FFFFFF33"));
-        this->sdBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FF4D4DFF"));
+        this->sdBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FFA500FF"));
         this->netIndicator = Rectangle::New(0, 0, 6, 6, COLOR("#FF3B30FF"), 3);
         this->wifiBar1 = Rectangle::New(0, 0, 4, 4, COLOR("#FFFFFF55"));
         this->wifiBar2 = Rectangle::New(0, 0, 4, 7, COLOR("#FFFFFF55"));
@@ -305,7 +305,7 @@ namespace inst::ui {
         this->butText = TextBlock::New(10, 678, mainButtonsText, 20);
         this->butText->SetColor(COLOR("#FFFFFFFF"));
         this->bottomHintSegments = BuildBottomHintSegments(mainButtonsText, 10, 20);
-        this->backupUserPickerRect = Rectangle::New(196, 102, 888, 516, inst::config::oledMode ? COLOR("#000000EE") : COLOR("#170909EE"));
+        this->backupUserPickerRect = Rectangle::New(196, 102, 888, 516, inst::config::oledMode ? COLOR("#000000EE") : COLOR("#181512F0"));
         this->backupUserPickerRect->SetVisible(false);
         this->backupUserPickerTitle = TextBlock::New(222, 124, "Select user account to back up", 24);
         this->backupUserPickerTitle->SetColor(COLOR("#FFFFFFFF"));
@@ -316,7 +316,7 @@ namespace inst::ui {
             this->optionMenu->SetScrollbarColor(COLOR("#FFFFFF66"));
         } else {
             this->optionMenu->SetOnFocusColor(COLOR("#00000033"));
-            this->optionMenu->SetScrollbarColor(COLOR("#17090980"));
+            this->optionMenu->SetScrollbarColor(COLOR("#14121090"));
         }
         this->optionMenu->SetVisible(false);
         this->backupUserPickerHint = TextBlock::New(222, 584, "A Select    B Cancel", 18);
@@ -349,8 +349,8 @@ namespace inst::ui {
         this->exitMenuItem = pu::ui::elm::MenuItem::New("main.menu.exit"_lang);
         this->exitMenuItem->SetColor(COLOR("#FFFFFFFF"));
         this->exitMenuItem->SetIcon("romfs:/images/icons/exit-run.png");
-        const auto tileColor = inst::config::oledMode ? COLOR("#1A1A1ACC") : COLOR("#170909CC");
-        const auto highlightColor = inst::config::oledMode ? COLOR("#FF4D4D66") : COLOR("#FF4D4D88");
+        const auto tileColor = inst::config::oledMode ? COLOR("#1A1A1ACC") : COLOR("#1E1914DD");
+        const auto highlightColor = inst::config::oledMode ? COLOR("#FFA00088") : COLOR("#FFA000AA");
         const std::vector<std::string> gridLabels = {
             "main.menu.remote"_lang,
             "main.menu.sd"_lang,

@@ -120,7 +120,7 @@ namespace inst::ui {
                 return "Firefox (Windows)";
             if (normalized == "custom")
                 return "Custom";
-            return "Default (CyberFoil)";
+            return "Default (Bichen Shop Game)";
         }
 
         int GetUserAgentProfileChoiceIndex(const std::string& mode)
@@ -265,13 +265,13 @@ namespace inst::ui {
             if (std::filesystem::exists(inst::config::appDir + "/background.png")) this->SetBackgroundImage(inst::config::appDir + "/background.png");
             else this->SetBackgroundImage("romfs:/images/background.jpg");
         }
-        const auto topColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#170909FF");
-        const auto infoColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#17090980");
-        const auto botColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#17090980");
+        const auto topColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#141210FF");
+        const auto infoColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#14121090");
+        const auto botColor = inst::config::oledMode ? COLOR("#000000FF") : COLOR("#14121090");
         this->topRect = Rectangle::New(0, 0, 1280, 74, topColor);
         this->infoRect = Rectangle::New(0, 75, 1280, 60, infoColor);
         this->botRect = Rectangle::New(0, 660, 1280, 60, botColor);
-        this->sideNavRect = Rectangle::New(0, 136, 300, 523, inst::config::oledMode ? COLOR("#FFFFFF18") : COLOR("#170909A0"));
+        this->sideNavRect = Rectangle::New(0, 136, 300, 523, inst::config::oledMode ? COLOR("#FFFFFF18") : COLOR("#141210B0"));
         if (inst::config::gayMode) {
             this->titleImage = Image::New(-113, -8, "romfs:/images/logo.png");
             this->appVersionText = TextBlock::New(367, 29, "v" + inst::config::appVersion + (inst::config::appGitMeta.empty() ? "" : ("\n" + inst::config::appGitMeta)), 22);
@@ -294,9 +294,9 @@ namespace inst::ui {
         this->sdFreeText = TextBlock::New(0, 42, "Free --", 16);
         this->sdFreeText->SetColor(COLOR("#FFFFFFFF"));
         this->sysBarBack = Rectangle::New(0, 30, 180, 6, COLOR("#FFFFFF33"));
-        this->sysBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FF4D4DFF"));
+        this->sysBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FFA500FF"));
         this->sdBarBack = Rectangle::New(0, 30, 180, 6, COLOR("#FFFFFF33"));
-        this->sdBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FF4D4DFF"));
+        this->sdBarFill = Rectangle::New(0, 30, 0, 6, COLOR("#FFA500FF"));
         this->netIndicator = Rectangle::New(0, 0, 6, 6, COLOR("#FF3B30FF"), 3);
         this->wifiBar1 = Rectangle::New(0, 0, 4, 4, COLOR("#FFFFFF55"));
         this->wifiBar2 = Rectangle::New(0, 0, 4, 7, COLOR("#FFFFFF55"));
@@ -316,7 +316,7 @@ namespace inst::ui {
             this->menu->SetScrollbarColor(COLOR("#FFFFFF66"));
         } else {
             this->menu->SetOnFocusColor(COLOR("#00000033"));
-            this->menu->SetScrollbarColor(COLOR("#17090980"));
+            this->menu->SetScrollbarColor(COLOR("#14121090"));
         }
         this->Add(this->topRect);
         this->Add(this->infoRect);
@@ -357,13 +357,13 @@ namespace inst::ui {
         this->Add(this->menu);
 
         this->remoteFormShade = Rectangle::New(0, 74, 1280, 586, COLOR("#00000088"));
-        this->remoteFormBorder = Rectangle::New(238, 80, 804, 574, inst::config::oledMode ? COLOR("#FFFFFF66") : COLOR("#170909FF"));
-        this->remoteFormPanel = Rectangle::New(241, 83, 798, 568, inst::config::oledMode ? COLOR("#000000FA") : COLOR("#170909FA"));
+        this->remoteFormBorder = Rectangle::New(238, 80, 804, 574, inst::config::oledMode ? COLOR("#FFFFFF66") : COLOR("#141210FF"));
+        this->remoteFormPanel = Rectangle::New(241, 83, 798, 568, inst::config::oledMode ? COLOR("#000000FA") : COLOR("#141210FA"));
         this->remoteFormTitle = TextBlock::New(270, 104, "Remote", 32);
         this->remoteFormHint = TextBlock::New(270, 614, " Edit/Select     Cancel", 20);
         this->remoteFormMenu = Menu::New(260, 140, 760, COLOR("#00000000"), 46, 10, 24);
         this->remoteFormMenu->SetOnFocusColor(inst::config::oledMode ? COLOR("#FFFFFF33") : COLOR("#00000070"));
-        this->remoteProtocolDropdownPanel = Rectangle::New(720, 146, 286, 108, inst::config::oledMode ? COLOR("#000000FF") : COLOR("#170909FF"));
+        this->remoteProtocolDropdownPanel = Rectangle::New(720, 146, 286, 108, inst::config::oledMode ? COLOR("#000000FF") : COLOR("#141210FF"));
         this->remoteProtocolDropdownMenu = Menu::New(728, 154, 270, COLOR("#00000000"), 46, 2, 25);
         this->remoteProtocolDropdownMenu->SetOnFocusColor(inst::config::oledMode ? COLOR("#FFFFFF33") : COLOR("#00000070"));
         this->remoteFormTitle->SetColor(COLOR("#FFFFFFFF"));
@@ -647,7 +647,7 @@ namespace inst::ui {
             return value.empty() ? emptyValue : inst::util::shortenString(value, 34, false);
         };
         const std::string protocol = this->remoteFormProfile.protocol == "https" ? "HTTPS" : "HTTP";
-        const std::string mode = this->remoteFormProfile.legacyMode ? "Legacy Mode (Tinfoil)" : "CyberFoil Mode";
+        const std::string mode = this->remoteFormProfile.legacyMode ? "Legacy Mode (Tinfoil)" : "Bichen Shop Mode";
         const std::string path = this->remoteFormProfile.path.empty() ? "/" : this->remoteFormProfile.path;
         const std::string password = this->remoteFormProfile.password.empty() ? "Not set" : "Set";
         const std::string favourite = this->remoteFormProfile.favourite ? "Yes" : "No";
@@ -694,11 +694,11 @@ namespace inst::ui {
         if (field == 1) {
             this->remoteModeDropdownVisible = true;
             this->remoteProtocolDropdownMenu->ClearItems();
-            auto cyberFoil = MenuItem::New("CyberFoil Mode");
+            auto bichenShop = MenuItem::New("Bichen Shop Mode");
             auto legacy = MenuItem::New("Legacy Mode (Tinfoil)");
-            cyberFoil->SetColor(COLOR("#FFFFFFFF"));
+            bichenShop->SetColor(COLOR("#FFFFFFFF"));
             legacy->SetColor(COLOR("#FFFFFFFF"));
-            this->remoteProtocolDropdownMenu->AddItem(cyberFoil);
+            this->remoteProtocolDropdownMenu->AddItem(bichenShop);
             this->remoteProtocolDropdownMenu->AddItem(legacy);
             this->remoteProtocolDropdownMenu->SetSelectedIndex(this->remoteFormProfile.legacyMode ? 1 : 0);
             this->remoteProtocolDropdownPanel->SetY(192);
@@ -1186,7 +1186,7 @@ namespace inst::ui {
                     }
 
                     const std::vector<std::string> profiles = {
-                        "Default (CyberFoil)",
+                        "Default (Bichen Shop Game)",
                         "Tinfoil",
                         "Chrome (Windows)",
                         "Safari (iPhone)",
@@ -1199,7 +1199,7 @@ namespace inst::ui {
                     const std::string currentLabel = profiles[currentIndex];
                     int profileChoice = inst::ui::mainApp->CreateShowDialog(
                         "User-Agent profile",
-                        "Used for file/media downloads. Remote API always uses CyberFoil.",
+                        "Used for file/media downloads. Remote API always uses Bichen Shop Game.",
                         profiles,
                         false
                     );

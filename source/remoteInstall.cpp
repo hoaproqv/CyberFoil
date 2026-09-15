@@ -1396,6 +1396,32 @@ namespace {
                                     item.saveCreatedTs = static_cast<std::uint64_t>(parsedCreatedTs);
                             }
                         }
+                        if (entry.is_object()) {
+                            static const char* rankKeys[] = {"rank", "ranking", "popularity", "rating", "order", "index"};
+                            for (const char* rk : rankKeys) {
+                                if (entry.contains(rk)) {
+                                    if (entry[rk].is_number_unsigned()) {
+                                        item.rank = entry[rk].get<std::uint32_t>();
+                                        item.hasRank = true;
+                                        break;
+                                    } else if (entry[rk].is_number_integer()) {
+                                        const auto pr = entry[rk].get<long long>();
+                                        if (pr >= 0) {
+                                            item.rank = static_cast<std::uint32_t>(pr);
+                                            item.hasRank = true;
+                                            break;
+                                        }
+                                    } else if (entry[rk].is_string()) {
+                                        try {
+                                            item.rank = static_cast<std::uint32_t>(std::stoul(entry[rk].get<std::string>()));
+                                            item.hasRank = true;
+                                            break;
+                                        } catch (...) {}
+                                    }
+                                }
+                            }
+                        }
+                        item.originalIndex = static_cast<std::uint32_t>(parsed.items.size());
                         ApplyOfflineDataToItem(item, hasExplicitName);
                         parsed.items.push_back(item);
                     }
@@ -1919,6 +1945,33 @@ namespace remoteInstStuff {
                 }
             }
 
+            if (entry.is_object()) {
+                static const char* rankKeys[] = {"rank", "ranking", "popularity", "rating", "order", "index"};
+                for (const char* rk : rankKeys) {
+                    if (entry.contains(rk)) {
+                        if (entry[rk].is_number_unsigned()) {
+                            item.rank = entry[rk].get<std::uint32_t>();
+                            item.hasRank = true;
+                            break;
+                        } else if (entry[rk].is_number_integer()) {
+                            const auto pr = entry[rk].get<long long>();
+                            if (pr >= 0) {
+                                item.rank = static_cast<std::uint32_t>(pr);
+                                item.hasRank = true;
+                                break;
+                            }
+                        } else if (entry[rk].is_string()) {
+                            try {
+                                item.rank = static_cast<std::uint32_t>(std::stoul(entry[rk].get<std::string>()));
+                                item.hasRank = true;
+                                break;
+                            } catch (...) {}
+                        }
+                    }
+                }
+            }
+
+            item.originalIndex = static_cast<std::uint32_t>(items.size());
             items.push_back(std::move(item));
             return true;
         }
@@ -2087,6 +2140,25 @@ namespace remoteInstStuff {
                 if (!identityKey.empty() && !seenItemUrls.insert(identityKey).second)
                     continue;
 
+                static const char* rankKeys[] = {"rank", "ranking", "popularity", "rating", "order", "index"};
+                for (const char* rk : rankKeys) {
+                    if (value.contains(rk)) {
+                        if (value[rk].is_number_unsigned()) {
+                            item.rank = value[rk].get<std::uint32_t>();
+                            item.hasRank = true;
+                            break;
+                        } else if (value[rk].is_number_integer()) {
+                            const auto pr = value[rk].get<long long>();
+                            if (pr >= 0) {
+                                item.rank = static_cast<std::uint32_t>(pr);
+                                item.hasRank = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                item.originalIndex = static_cast<std::uint32_t>(items.size());
                 items.push_back(std::move(item));
                 any = true;
             }

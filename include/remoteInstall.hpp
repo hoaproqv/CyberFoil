@@ -28,11 +28,14 @@ namespace remoteInstStuff {
         std::uint32_t appVersion = 0;
         std::uint32_t releaseDate = 0;
         std::int32_t appType = -1;
+        std::uint32_t rank = 0;
+        std::uint32_t originalIndex = 0;
         bool hasTitleId = false;
         bool hasAppVersion = false;
         bool hasReleaseDate = false;
         bool hasIconUrl = false;
         bool hasAppId = false;
+        bool hasRank = false;
         bool googleDriveWithoutApiKey = false;
         bool isCheat = false;
     };

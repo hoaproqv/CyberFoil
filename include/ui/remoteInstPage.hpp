@@ -49,9 +49,16 @@ namespace inst::ui {
             Rectangle::Ref batteryCap;
         private:
             enum class BrowseSortMode {
-                Default,
-                DateDesc,
-                NameAsc
+                Rank = 0,
+                ShopOrder = 1,
+                NameAsc = 2,
+                NameDesc = 3,
+                DateDesc = 4,
+                DateAsc = 5,
+                SizeDesc = 6,
+                SizeAsc = 7,
+                TitleId = 8,
+                Default = 0
             };
             std::vector<remoteInstStuff::RemoteSection> remoteSections;
             std::vector<remoteInstStuff::RemoteItem> selectedItems;
