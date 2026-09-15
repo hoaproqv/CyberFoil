@@ -1561,7 +1561,7 @@ namespace remoteInstStuff {
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-            const std::string userAgent = inst::config::remoteLegacyMode ? std::string() : inst::curl::getDefaultUserAgent();
+            const std::string userAgent = inst::config::remoteLegacyMode ? std::string() : inst::curl::getUserAgent();
             curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent.c_str());
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteToString);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.body);
@@ -1779,6 +1779,14 @@ namespace remoteInstStuff {
 
             if (rawUrl.empty())
                 return false;
+
+            // If rawUrl is just a 16-character hex Title ID without path or extension,
+            // it is a Title ID (e.g. from "new" or title lists), not a file URL.
+            if (rawUrl.size() == 16 && rawUrl.find('/') == std::string::npos && rawUrl.find('.') == std::string::npos) {
+                std::uint64_t dummyTid = 0;
+                if (TryParseTitleIdText(rawUrl, dummyTid))
+                    return false;
+            }
 
             std::uint64_t size = 0;
             if (entry.is_object()) {
@@ -2338,10 +2346,8 @@ namespace remoteInstStuff {
 
         bool ApplyCustomIndexLocations(const nlohmann::json& locations, std::string& error)
         {
-            if (!locations.is_array()) {
-                error = "Custom index locations must be an array.";
-                return false;
-            }
+            if (!locations.is_array())
+                return true;
 
             std::vector<inst::config::RemoteProfile> savedRemotes = inst::config::LoadRemotes();
             for (const auto& location : locations) {
@@ -2363,8 +2369,7 @@ namespace remoteInstStuff {
                         }
                     }
                 } else {
-                    error = "Custom index contains an invalid location entry.";
-                    return false;
+                    continue;
                 }
 
                 url = TrimAscii(url);
@@ -2374,8 +2379,9 @@ namespace remoteInstStuff {
                 std::string path;
                 int port = 0;
                 if (url.empty() || !inst::config::ParseRemoteUrl(url, protocol, host, port, path)) {
-                    error = "Custom index location must be a valid HTTP(S) URL.";
-                    return false;
+                    // Relative paths or non-HTTP URLs are manifest paths (handled by CollectRemoteItemsFromJson),
+                    // not remote bookmarks to save.
+                    continue;
                 }
 
                 inst::config::RemoteProfile profile;
@@ -2384,8 +2390,6 @@ namespace remoteInstStuff {
                 profile.port = port;
                 profile.path = path;
                 const std::string derivedTitle = path.empty() ? host : (host + path);
-                // Legacy custom-index locations may omit a title, while saved
-                // profiles always require one.
                 profile.title = title.empty() ? derivedTitle : title;
                 const std::string normalizedUrl = inst::config::BuildRemoteUrl(profile);
                 auto saved = std::find_if(savedRemotes.begin(), savedRemotes.end(), [&](const auto& candidate) {
@@ -2394,73 +2398,29 @@ namespace remoteInstStuff {
 
                 if (action == "disable") {
                     if (saved != savedRemotes.end()) {
-                        std::string deleteError;
-                        if (!inst::config::DeleteRemote(saved->fileName)) {
-                            error = "Unable to disable custom index location.";
-                            return false;
-                        }
+                        inst::config::DeleteRemote(saved->fileName);
                         savedRemotes.erase(saved);
                     }
                 } else if (action == "add" || action == "enable") {
                     if (saved == savedRemotes.end()) {
                         std::string saveError;
-                        if (!inst::config::SaveRemote(profile, &saveError)) {
-                            error = saveError.empty() ? "Unable to save custom index location." : saveError;
-                            return false;
+                        if (inst::config::SaveRemote(profile, &saveError)) {
+                            savedRemotes.push_back(profile);
                         }
-                        savedRemotes.push_back(profile);
                     } else if (!title.empty() && saved->title == derivedTitle) {
-                        // Repair profiles saved by older builds that had to derive
-                        // the title because the legacy response title was ignored.
                         profile.fileName = saved->fileName;
                         std::string saveError;
-                        if (!inst::config::SaveRemote(profile, &saveError)) {
-                            error = saveError.empty() ? "Unable to update custom index location." : saveError;
-                            return false;
+                        if (inst::config::SaveRemote(profile, &saveError)) {
+                            *saved = profile;
                         }
-                        *saved = profile;
                     }
-                } else {
-                    error = "Custom index location action must be add, enable, or disable.";
-                    return false;
                 }
             }
             return true;
         }
 
-        bool ValidateCustomIndexOptions(const nlohmann::json& remote, std::string& error)
+        bool ValidateCustomIndexOptions(const nlohmann::json& /*remote*/, std::string& /*error*/)
         {
-            const auto requireString = [&](const char* key) {
-                if (remote.contains(key) && !remote[key].is_string()) {
-                    error = std::string("Custom index field '") + key + "' must be a string.";
-                    return false;
-                }
-                return true;
-            };
-            const auto requireStringArray = [&](const char* key) {
-                if (!remote.contains(key))
-                    return true;
-                if (!remote[key].is_array() || !std::all_of(remote[key].begin(), remote[key].end(), [](const auto& value) { return value.is_string(); })) {
-                    error = std::string("Custom index field '") + key + "' must be an array of strings.";
-                    return false;
-                }
-                return true;
-            };
-
-            if (!requireString("success") || !requireString("error") || !requireString("referrer") ||
-                !requireString("googleApiKey") || !requireString("clientCertPub") ||
-                !requireString("clientCertKey") || !requireString("themeError") ||
-                !requireStringArray("oneFichierKeys") || !requireStringArray("headers") ||
-                !requireStringArray("themeBlackList") || !requireStringArray("themeWhiteList"))
-                return false;
-            if (remote.contains("version") && !remote["version"].is_number()) {
-                error = "Custom index field 'version' must be a number.";
-                return false;
-            }
-            if (remote.contains("titledb") && !remote["titledb"].is_object()) {
-                error = "Custom index field 'titledb' must be an object.";
-                return false;
-            }
             return true;
         }
 
@@ -2490,9 +2450,12 @@ namespace remoteInstStuff {
             if (!ValidateCustomIndexOptions(remote, error))
                 return false;
             if (remote.contains("error") && remote["error"].is_string()) {
-                error = remote["error"].get<std::string>();
-                LogRemoteDebug("CollectRemoteItemsFromJson: remote contains error: " + error);
-                return false;
+                const std::string errStr = TrimAscii(remote["error"].get<std::string>());
+                if (!errStr.empty() && errStr != "0" && errStr != "null" && errStr != "false") {
+                    error = errStr;
+                    LogRemoteDebug("CollectRemoteItemsFromJson: remote contains error: " + error);
+                    return false;
+                }
             }
 
             std::string googleApiKey = inheritedGoogleApiKey;
@@ -2517,8 +2480,10 @@ namespace remoteInstStuff {
                 }
             }
 
-            if (remote.contains("locations") && !ApplyCustomIndexLocations(remote["locations"], error))
-                return false;
+            if (remote.contains("locations")) {
+                std::string locErr;
+                ApplyCustomIndexLocations(remote["locations"], locErr);
+            }
 
             bool handled = false;
 
@@ -2545,7 +2510,7 @@ namespace remoteInstStuff {
             static const std::vector<std::string> kFileCandidateKeys = {
                 "files", "paths", "games", "updates", "dlc", "items",
                 "entries", "packages", "data", "list", "content",
-                "recommended", "recommends", "featured", "popular", "new",
+                "recommended", "recommends", "featured", "popular",
                 "nsps", "xci", "xcis", "nsz", "tfl"
             };
             for (const auto& k : kFileCandidateKeys) {
@@ -2649,7 +2614,8 @@ namespace remoteInstStuff {
                     if (k == "success" || k == "error" || k == "locations" || k == "headers" ||
                         k == "themeBlackList" || k == "themeWhiteList" || k == "oneFichierKeys" ||
                         k == "googleApiKey" || k == "clientCertPub" || k == "clientCertKey" ||
-                        k == "version" || k == "referrer" || k == "themeError" || k == "directories") {
+                        k == "version" || k == "referrer" || k == "themeError" || k == "directories" ||
+                        k == "new" || k == "motd") {
                         continue;
                     }
                     const auto& v = it.value();
@@ -2735,6 +2701,8 @@ namespace remoteInstStuff {
             if (items.empty()) {
                 if (!legacyError.empty())
                     error = legacyError;
+                else if (error.empty())
+                    error = "Remote catalog is empty or invalid.";
                 return false;
             }
 
@@ -2753,24 +2721,17 @@ namespace remoteInstStuff {
         auto trySectionsPath = [&](const std::string& apiPrefix) -> bool {
             std::string sectionsUrl = baseUrl + apiPrefix + "/sections";
             FetchResult fetch = FetchRemoteResponse(sectionsUrl, user, pass, progressCb);
-            if (fetch.responseCode == 404)
+            if (fetch.responseCode != 200)
                 return false;
 
-            if (!ValidateRemoteResponse(fetch, error)) {
-                if (!fetch.error.empty()) {
-                    error = "inst.remote.unreachable"_lang + "\n" + fetch.error;
-                    if (fetch.responseCode > 0)
-                        error += "\nHTTP " + std::to_string(fetch.responseCode);
-                }
+            std::string tempErr;
+            if (!ValidateRemoteResponse(fetch, tempErr))
                 return false;
-            }
 
             std::string parseError;
             std::vector<RemoteSection> parsed = ParseRemoteSectionsBody(fetch.body, baseUrl, parseError);
-            if (parsed.empty() && !parseError.empty()) {
-                error = parseError;
+            if (parsed.empty())
                 return false;
-            }
 
             sections = std::move(parsed);
             error.clear();

@@ -4228,11 +4228,31 @@ namespace inst::ui {
         mainApp->CallForRender();
 
         this->selectedSectionIndex = 0;
+        int preferredIndex = -1;
         for (size_t i = 0; i < this->remoteSections.size(); i++) {
-            if (this->remoteSections[i].id == "new") {
-                this->selectedSectionIndex = static_cast<int>(i);
+            if (this->remoteSections[i].id == "new" && !this->remoteSections[i].items.empty()) {
+                preferredIndex = static_cast<int>(i);
                 break;
             }
+        }
+        if (preferredIndex < 0) {
+            for (size_t i = 0; i < this->remoteSections.size(); i++) {
+                if (this->remoteSections[i].id == "recommended" && !this->remoteSections[i].items.empty()) {
+                    preferredIndex = static_cast<int>(i);
+                    break;
+                }
+            }
+        }
+        if (preferredIndex < 0) {
+            for (size_t i = 0; i < this->remoteSections.size(); i++) {
+                if (!this->remoteSections[i].items.empty()) {
+                    preferredIndex = static_cast<int>(i);
+                    break;
+                }
+            }
+        }
+        if (preferredIndex >= 0) {
+            this->selectedSectionIndex = preferredIndex;
         }
         this->remoteGridMode = inst::config::remoteStartGridMode;
         this->remoteGridIndex = 0;
