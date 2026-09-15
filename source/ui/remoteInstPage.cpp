@@ -380,6 +380,8 @@ namespace {
         return true;
     }
 
+    bool DeriveBaseTitleId(const remoteInstStuff::RemoteItem& item, std::uint64_t& out);
+
     bool TryGetItemSortDateKey(const remoteInstStuff::RemoteItem& item, std::uint64_t& out)
     {
         if (item.saveCreatedTs > 0) {
