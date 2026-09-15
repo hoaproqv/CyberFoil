@@ -14,11 +14,12 @@
 #include "util/config.hpp"
 #include "util/error.hpp"
 #include "util/json.hpp"
+#include "remoteInstall.hpp"
 
 namespace inst::offline
 {
     namespace {
-        constexpr std::uintmax_t kMaxMetadataParseBytes = 48ULL * 1024ULL * 1024ULL;
+        constexpr std::uintmax_t kMaxMetadataParseBytes = 128ULL * 1024ULL * 1024ULL;
         constexpr std::uintmax_t kMaxIconIndexParseBytes = 8ULL * 1024ULL * 1024ULL;
         constexpr std::uintmax_t kMaxIconPackIndexBytes = 16ULL * 1024ULL * 1024ULL;
         constexpr std::uintmax_t kMaxTitlePackIndexBytes = 32ULL * 1024ULL * 1024ULL;
@@ -120,9 +121,15 @@ namespace inst::offline
         {
             const std::string base = inst::config::appDir;
             return {
+                "sdmc:/switch/tinfoil/db/titles.US.en.json",
+                "sdmc:/switch/tinfoil/db/titles.json",
+                "sdmc:/switch/tinfoil/titles.US.en.json",
+                "sdmc:/switch/tinfoil/titles.json",
                 base + "/offline_db/titles.min.json",
                 base + "/offline_db/titles.US.en.min.json",
                 base + "/offline_db/titles.US.en.json",
+                base + "/db/titles.US.en.json",
+                base + "/db/titles.json",
                 base + "/titles.min.json",
                 base + "/titles.US.en.json",
                 base + "/artefacts/titles.US.en.json",
@@ -266,6 +273,29 @@ namespace inst::offline
             if (src.contains("releaseDate") && TryGetNumericU32(src["releaseDate"], releaseDate)) {
                 out.releaseDate = releaseDate;
                 out.hasReleaseDate = true;
+            } else if (src.contains("release_date") && TryGetNumericU32(src["release_date"], releaseDate)) {
+                out.releaseDate = releaseDate;
+                out.hasReleaseDate = true;
+            }
+
+            std::uint32_t rankVal = 0;
+            static const char* rankKeys[] = {"rank", "ranking", "popularity", "order", "index"};
+            for (const char* rk : rankKeys) {
+                if (src.contains(rk) && TryGetNumericU32(src[rk], rankVal)) {
+                    out.rank = rankVal;
+                    out.hasRank = true;
+                    break;
+                }
+            }
+
+            std::uint32_t ratingVal = 0;
+            static const char* ratingKeys[] = {"rating", "score"};
+            for (const char* rk : ratingKeys) {
+                if (src.contains(rk) && TryGetNumericU32(src[rk], ratingVal)) {
+                    out.rating = ratingVal;
+                    out.hasRating = true;
+                    break;
+                }
             }
 
             if (src.contains("isDemo") && src["isDemo"].is_boolean()) {
@@ -273,7 +303,7 @@ namespace inst::offline
                 out.hasIsDemo = true;
             }
 
-            return !(out.name.empty() && out.publisher.empty() && !out.hasSize && !out.hasVersion && !out.hasReleaseDate && !out.hasIsDemo);
+            return !(out.name.empty() && out.publisher.empty() && !out.hasSize && !out.hasVersion && !out.hasReleaseDate && !out.hasIsDemo && !out.hasRank && !out.hasRating);
         }
 
         // Dense row format used by exporter:
@@ -471,9 +501,24 @@ namespace inst::offline
             if (!in)
                 return false;
 
+            std::string content((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            if (content.empty())
+                return false;
+
+            if (content.rfind("TINFOIL", 0) == 0) {
+                std::string decoded;
+                std::string decodeError;
+                if (remoteInstStuff::DecodeLegacyPayload(content, decoded, decodeError)) {
+                    content = std::move(decoded);
+                } else {
+                    LOG_DEBUG("Offline DB: failed to decode Tinfoil payload from %s: %s\n", path.c_str(), decodeError.c_str());
+                    return false;
+                }
+            }
+
             nlohmann::json root;
             try {
-                in >> root;
+                root = nlohmann::json::parse(content);
             } catch (...) {
                 return false;
             }

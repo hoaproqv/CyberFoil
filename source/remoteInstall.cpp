@@ -1220,6 +1220,10 @@ namespace {
                 item.releaseDate = meta.releaseDate;
                 item.hasReleaseDate = true;
             }
+            if (!item.hasRank && meta.hasRank && meta.rank > 0) {
+                item.rank = meta.rank;
+                item.hasRank = true;
+            }
         }
 
     }
@@ -1879,6 +1883,23 @@ namespace remoteInstStuff {
                         }
                     }
                 }
+                static const char* rankKeys[] = {"rank", "ranking", "popularity", "rating", "order", "index"};
+                for (const char* rk : rankKeys) {
+                    if (entry.contains(rk)) {
+                        if (entry[rk].is_number_unsigned()) {
+                            item.rank = entry[rk].get<std::uint32_t>();
+                            item.hasRank = true;
+                            break;
+                        } else if (entry[rk].is_number_integer()) {
+                            const auto pr = entry[rk].get<long long>();
+                            if (pr >= 0) {
+                                item.rank = static_cast<std::uint32_t>(pr);
+                                item.hasRank = true;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
 
             std::uint32_t releaseDate = 0;
@@ -2524,6 +2545,7 @@ namespace remoteInstStuff {
             static const std::vector<std::string> kFileCandidateKeys = {
                 "files", "paths", "games", "updates", "dlc", "items",
                 "entries", "packages", "data", "list", "content",
+                "recommended", "recommends", "featured", "popular", "new",
                 "nsps", "xci", "xcis", "nsz", "tfl"
             };
             for (const auto& k : kFileCandidateKeys) {
@@ -2586,8 +2608,9 @@ namespace remoteInstStuff {
                 }
             }
 
-            if (items.empty() && remote.contains("locations") && remote["locations"].is_array()) {
-                LogRemoteDebug("CollectRemoteItemsFromJson: items empty, trying locations as directories");
+            if (remote.contains("locations") && remote["locations"].is_array()) {
+                handled = true;
+                LogRemoteDebug("CollectRemoteItemsFromJson: scanning " + std::to_string(remote["locations"].size()) + " locations");
                 for (const auto& location : remote["locations"]) {
                     std::string locUrl;
                     if (location.is_string()) {
@@ -2762,6 +2785,11 @@ namespace remoteInstStuff {
         if (tryLegacyFallback())
             return sections;
         return sections;
+    }
+
+    bool DecodeLegacyPayload(const std::string& body, std::string& outDecoded, std::string& outError)
+    {
+        return ::DecodeLegacyPayload(body, outDecoded, outError);
     }
 
     bool DownloadCheatText(const RemoteItem& item, const std::string& user, const std::string& pass, std::string& text, std::string& error)

@@ -1312,6 +1312,15 @@ namespace inst::ui {
         return this->remoteSections[this->selectedSectionIndex].id == "installed";
     }
 
+    bool remoteInstPage::isRecommendedSection() const {
+        if (this->remoteSections.empty())
+            return false;
+        if (this->selectedSectionIndex < 0 || this->selectedSectionIndex >= (int)this->remoteSections.size())
+            return false;
+        const std::string id = this->remoteSections[this->selectedSectionIndex].id;
+        return id == "recommended" || id == "recommend" || id == "featured";
+    }
+
     bool remoteInstPage::isSaveSyncSection() const {
         if (!this->saveSyncEnabled)
             return false;
@@ -1642,13 +1651,19 @@ namespace inst::ui {
     const char* remoteInstPage::getBrowseSortLabel() const
     {
         static std::string s_browseLabel;
-        s_browseLabel = GetUnifiedSortLabel(static_cast<int>(this->browseSortMode));
+        int mode = static_cast<int>(this->browseSortMode);
+        if (this->browseSortMode == BrowseSortMode::Default && this->isRecommendedSection())
+            mode = 0;
+        s_browseLabel = GetUnifiedSortLabel(mode);
         return s_browseLabel.c_str();
     }
 
     void remoteInstPage::applyBrowseSort()
     {
-        ExecuteUnifiedSort(this->visibleItems, static_cast<int>(this->browseSortMode));
+        int mode = static_cast<int>(this->browseSortMode);
+        if (this->browseSortMode == BrowseSortMode::Default && this->isRecommendedSection())
+            mode = 0;
+        ExecuteUnifiedSort(this->visibleItems, mode);
     }
 
     void remoteInstPage::openSearchDialog()
@@ -2825,6 +2840,80 @@ namespace inst::ui {
         }
     }
 
+    void remoteInstPage::buildRecommendedSection() {
+        if (this->remoteSections.empty())
+            return;
+
+        auto normalizeSectionId = [](std::string value) {
+            std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+                return static_cast<char>(std::tolower(c));
+            });
+            return value;
+        };
+
+        for (const auto& section : this->remoteSections) {
+            const std::string id = normalizeSectionId(section.id);
+            if (id == "recommended" || id == "recommend" || id == "featured")
+                return;
+        }
+
+        std::vector<remoteInstStuff::RemoteItem> recommendedItems;
+        std::unordered_set<std::string> seenKeys;
+
+        for (const auto& section : this->remoteSections) {
+            const std::string id = normalizeSectionId(section.id);
+            if (id == "updates" || id == "update" || id == "dlc" || id == "addon" || id == "installed" || id == "saves" || id == "save" || id == "cheats")
+                continue;
+
+            for (const auto& item : section.items) {
+                if (!item.hasRank || item.rank == 0)
+                    continue;
+                if (IsUpdateItem(item) || IsDlcItem(item))
+                    continue;
+
+                std::string key = BuildItemIdentityKey(item);
+                if (key.empty())
+                    key = "name:" + NormalizeSearchKey(item.name);
+                if (!key.empty() && !seenKeys.insert(key).second)
+                    continue;
+
+                recommendedItems.push_back(item);
+            }
+        }
+
+        if (recommendedItems.empty())
+            return;
+
+        std::stable_sort(recommendedItems.begin(), recommendedItems.end(), [](const auto& a, const auto& b) {
+            if (a.rank != b.rank)
+                return a.rank < b.rank;
+            return a.originalIndex < b.originalIndex;
+        });
+
+        if (recommendedItems.size() > 300)
+            recommendedItems.resize(300);
+
+        remoteInstStuff::RemoteSection recSection;
+        recSection.id = "recommended";
+        recSection.title = "Recommended";
+        recSection.items = std::move(recommendedItems);
+
+        int insertPos = 0;
+        for (std::size_t i = 0; i < this->remoteSections.size(); i++) {
+            const std::string id = normalizeSectionId(this->remoteSections[i].id);
+            if (id == "new") {
+                insertPos = static_cast<int>(i) + 1;
+                break;
+            } else if (id == "all") {
+                insertPos = static_cast<int>(i) + 1;
+            }
+        }
+        if (insertPos >= static_cast<int>(this->remoteSections.size()))
+            this->remoteSections.push_back(std::move(recSection));
+        else
+            this->remoteSections.insert(this->remoteSections.begin() + insertPos, std::move(recSection));
+    }
+
     void remoteInstPage::cacheAvailableUpdates() {
         this->availableUpdates.clear();
         std::unordered_set<std::string> seenKeys;
@@ -3240,6 +3329,32 @@ namespace inst::ui {
                 if (name.find(normalizedQuery) != std::string::npos)
                     this->visibleItems.push_back(item);
             }
+
+            if (this->visibleItems.empty()) {
+                std::unordered_set<std::string> seenUrls;
+                for (const auto& section : this->remoteSections) {
+                    if (section.id == "all" || section.id == "games") {
+                        for (const auto& item : section.items) {
+                            if (seenUrls.insert(item.url).second) {
+                                if (NormalizeSearchKey(item.name).find(normalizedQuery) != std::string::npos)
+                                    this->visibleItems.push_back(item);
+                            }
+                        }
+                    }
+                }
+                if (this->visibleItems.empty()) {
+                    for (const auto& section : this->remoteSections) {
+                        if (section.id == "installed" || section.id == "saves" || section.id == "save" || section.id == "cheats")
+                            continue;
+                        for (const auto& item : section.items) {
+                            if (seenUrls.insert(item.url).second) {
+                                if (NormalizeSearchKey(item.name).find(normalizedQuery) != std::string::npos)
+                                    this->visibleItems.push_back(item);
+                            }
+                        }
+                    }
+                }
+            }
         } else {
             this->visibleItems = items;
         }
@@ -3250,11 +3365,11 @@ namespace inst::ui {
             }), this->visibleItems.end());
         }
 
-        if (this->isAllSection() && inst::config::remoteAllBaseOnly) {
+        if (this->isAllSection() && inst::config::remoteAllBaseOnly && this->searchQuery.empty()) {
             std::vector<remoteInstStuff::RemoteItem> baseOnlyItems;
             baseOnlyItems.reserve(this->visibleItems.size());
             for (const auto& item : this->visibleItems) {
-                if (IsBaseItem(item))
+                if (IsBaseItem(item) || (!IsUpdateItem(item) && !IsDlcItem(item)))
                     baseOnlyItems.push_back(item);
             }
             this->visibleItems = std::move(baseOnlyItems);
@@ -4086,6 +4201,8 @@ namespace inst::ui {
         updateLoadingProgress(99, "Preparing owned sections...");
         this->buildLegacyOwnedSections();
         RemoteDlcTrace("after buildLegacyOwnedSections sections=%llu", static_cast<unsigned long long>(this->remoteSections.size()));
+        updateLoadingProgress(99, "Preparing recommended section...");
+        this->buildRecommendedSection();
         updateLoadingProgress(99, "Checking available updates...");
         this->cacheAvailableUpdates();
         RemoteDlcTrace("after cacheAvailableUpdates availableUpdates=%llu", static_cast<unsigned long long>(this->availableUpdates.size()));
@@ -4157,6 +4274,7 @@ namespace inst::ui {
         this->installedSnapshot = {};
         this->ensureInstalledSectionPlaceholder();
         (void)this->ensureInstalledSectionBuilt();
+        this->buildRecommendedSection();
         this->cacheAvailableUpdates();
         this->filterOwnedSections();
         this->applyAllSectionSort();

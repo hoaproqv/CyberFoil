@@ -14,11 +14,15 @@ namespace inst::offline
         std::uint64_t size = 0;
         std::uint32_t version = 0;
         std::uint32_t releaseDate = 0;
+        std::uint32_t rank = 0;
+        std::uint32_t rating = 0;
         bool hasSize = false;
         bool hasVersion = false;
         bool hasReleaseDate = false;
         bool isDemo = false;
         bool hasIsDemo = false;
+        bool hasRank = false;
+        bool hasRating = false;
     };
 
     std::string GetOfflineDbDir();

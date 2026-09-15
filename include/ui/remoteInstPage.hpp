@@ -218,6 +218,7 @@ namespace inst::ui {
             void updateListMarquee(bool force);
             void buildInstalledSection();
             void buildLegacyOwnedSections();
+            void buildRecommendedSection();
             void cacheAvailableUpdates();
             void filterOwnedSections();
             void updatePreview();
@@ -227,6 +228,7 @@ namespace inst::ui {
             const std::vector<remoteInstStuff::RemoteItem>& getCurrentItems() const;
             bool isAllSection() const;
             bool isInstalledSection() const;
+            bool isRecommendedSection() const;
             bool isSaveSyncSection() const;
             bool isCheatsSection() const;
             bool isCheatCompatible(const remoteInstStuff::RemoteItem& item) const;
