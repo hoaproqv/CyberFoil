@@ -392,6 +392,14 @@ namespace {
             out = item.releaseDate;
             return true;
         }
+        std::uint64_t baseTitleId = 0;
+        if (DeriveBaseTitleId(item, baseTitleId)) {
+            inst::offline::TitleMetadata meta;
+            if (inst::offline::TryGetMetadata(baseTitleId, meta) && meta.hasReleaseDate && meta.releaseDate > 0) {
+                out = meta.releaseDate;
+                return true;
+            }
+        }
         return false;
     }
 
@@ -1349,25 +1357,23 @@ namespace inst::ui {
     static std::string GetUnifiedSortLabel(int mode) {
         switch (mode) {
             case 0:
-                return "Rank / Popularity";
+                return "Rank";
             case 1:
-                return "Shop Order";
+                return "Shop";
             case 2:
-                return "Name A-Z";
+                return "A - Z";
             case 3:
-                return "Name Z-A";
+                return "Z - A";
             case 4:
-                return "Date New-Old";
+                return "Mới nhất";
             case 5:
-                return "Date Old-New";
+                return "Cũ nhất";
             case 6:
-                return "Size Large-Small";
+                return "Size Lớn";
             case 7:
-                return "Size Small-Large";
-            case 8:
-                return "Title ID";
+                return "Size Nhỏ";
             default:
-                return "Rank / Popularity";
+                return "Rank";
         }
     }
 
@@ -1377,7 +1383,7 @@ namespace inst::ui {
         };
 
         switch (mode) {
-            case 0: // Rank / Popularity
+            case 0: // Rank
                 std::stable_sort(items.begin(), items.end(), [&](const auto& a, const auto& b) {
                     if (a.hasRank && b.hasRank) {
                         if (a.rank != b.rank)
@@ -1386,9 +1392,20 @@ namespace inst::ui {
                     }
                     if (a.hasRank != b.hasRank)
                         return a.hasRank;
-                    if (a.originalIndex != b.originalIndex)
-                        return a.originalIndex < b.originalIndex;
-                    return byNameAsc(a, b);
+
+                    std::uint64_t aDate = 0;
+                    std::uint64_t bDate = 0;
+                    const bool aHasDate = TryGetItemSortDateKey(a, aDate);
+                    const bool bHasDate = TryGetItemSortDateKey(b, bDate);
+                    if (aHasDate && bHasDate && aDate != bDate)
+                        return aDate > bDate;
+                    if (aHasDate != bHasDate)
+                        return aHasDate;
+
+                    if (a.size != b.size)
+                        return a.size > b.size;
+
+                    return a.originalIndex < b.originalIndex;
                 });
                 break;
             case 1: // Shop Order
@@ -1446,15 +1463,6 @@ namespace inst::ui {
                     return byNameAsc(a, b);
                 });
                 break;
-            case 8: // Title ID
-                std::stable_sort(items.begin(), items.end(), [&](const auto& a, const auto& b) {
-                    if (a.hasTitleId != b.hasTitleId)
-                        return a.hasTitleId;
-                    if (a.hasTitleId && b.hasTitleId && a.titleId != b.titleId)
-                        return a.titleId < b.titleId;
-                    return byNameAsc(a, b);
-                });
-                break;
             default:
                 break;
         }
@@ -1492,8 +1500,8 @@ namespace inst::ui {
         CenterTextX(this->pageInfoText);
         std::string rightInfo;
         if (!this->searchQuery.empty()) {
-            std::string query = inst::util::shortenString(this->searchQuery, 28, true);
-            rightInfo = "Search: " + query;
+            std::string query = inst::util::shortenString(this->searchQuery, 16, true);
+            rightInfo = "Tìm: " + query;
         }
         if (this->isAllSection()) {
             if (!rightInfo.empty())
@@ -1508,9 +1516,9 @@ namespace inst::ui {
 
         if (!rightInfo.empty()) {
             this->searchInfoText->SetText(rightInfo);
-            int x = 1280 - this->searchInfoText->GetTextWidth() - 12;
-            if (x < 0)
-                x = 0;
+            int x = 1280 - this->searchInfoText->GetTextWidth() - 20;
+            if (x < 720)
+                x = 720;
             this->searchInfoText->SetX(x);
             this->searchInfoText->SetVisible(true);
         } else {
@@ -1657,23 +1665,22 @@ namespace inst::ui {
     void remoteInstPage::openSortDialog()
     {
         const bool allSection = this->isAllSection();
-        std::string details = "Current sort: ";
+        std::string details = "Hiện tại: ";
         details += allSection ? this->getAllSortModeLabel() : this->getBrowseSortLabel();
         std::vector<std::string> options = {
-            "Rank / Popularity",
-            "Shop Order",
-            "Name A-Z",
-            "Name Z-A",
-            "Date New-Old",
-            "Date Old-New",
-            "Size Large-Small",
-            "Size Small-Large",
-            "Title ID",
+            "Rank",
+            "Shop",
+            "A - Z",
+            "Z - A",
+            "Mới nhất",
+            "Cũ nhất",
+            "Size Lớn",
+            "Size Nhỏ",
             "common.cancel"_lang
         };
 
-        const int choice = mainApp->CreateShowDialog("Sort Remote", details, options, false);
-        if (choice < 0 || choice >= 9)
+        const int choice = mainApp->CreateShowDialog("Sắp xếp", details, options, false);
+        if (choice < 0 || choice >= 8)
             return;
 
         bool needsRedraw = false;
@@ -2010,20 +2017,18 @@ namespace inst::ui {
     void remoteInstPage::updateButtonsText() {
         if (this->saveVersionSelectorVisible) {
             if (this->saveVersionSelectorDeleteMode)
-                this->setButtonsText(" Delete Backup    / Select Version     Back");
+                this->setButtonsText(" Xóa    / Bản sao     Quay lại");
             else
-                this->setButtonsText(" Download    / Select Version     Back");
+                this->setButtonsText(" Tải    / Bản sao     Quay lại");
         }
         else if (this->isSaveSyncSection())
-            this->setButtonsText(" Manage Save     Refresh    / Section     Search    \xEE\x83\x85 Sort     Cancel");
+            this->setButtonsText(" Save     Tải lại    / Mục     Tìm    \xEE\x83\x85 Sort     Thoát");
         else if (this->isCheatsSection())
-            this->setButtonsText(" Manage Cheat     Install All     Refresh    / Section     Search    \xEE\x83\x85 Sort     Cancel");
+            this->setButtonsText(" Cheat     Cài hết     Tải lại    / Mục     Tìm    \xEE\x83\x85 Sort     Thoát");
         else if (this->isInstalledSection())
-            this->setButtonsText(" Details     Refresh    / Section     Search    \xEE\x83\x85 Sort     View     Cancel");
+            this->setButtonsText(" Chi tiết     Tải lại    / Mục     Tìm    \xEE\x83\x85 Sort     Xem     Thoát");
         else {
-            std::string buttonsText = "inst.remote.buttons_all"_lang;
-            buttonsText += "    \xEE\x83\x85 Sort";
-            this->setButtonsText(buttonsText);
+            this->setButtonsText(" Chọn     Tất cả     Cài     Tải lại    / Mục     Tìm    \xEE\x83\x85 Sort     Xem     Thoát");
         }
     }
 
@@ -5269,7 +5274,7 @@ namespace inst::ui {
         std::string fullText = text;
         int hintFontSize = 18;
         this->butText->SetFontSize(hintFontSize);
-        const std::string descHint = "     Show Desc";
+        const std::string descHint = "     Chi tiết";
         auto segments = BuildBottomHintSegments(fullText + descHint, 10, 20);
         if (!segments.empty()) {
             const auto& last = segments.back();

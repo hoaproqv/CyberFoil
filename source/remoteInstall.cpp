@@ -1934,8 +1934,7 @@ namespace remoteInstStuff {
                 }
             }
 
-            if (inst::config::remoteLegacyMode)
-                ApplyOfflineDataToItem(item, entry.is_object() && entry.contains("name") && entry["name"].is_string());
+            ApplyOfflineDataToItem(item, entry.is_object() && entry.contains("name") && entry["name"].is_string());
 
             if (!item.hasIconUrl && !inst::config::remoteLegacyMode) {
                 std::uint64_t baseTitleId = 0;
@@ -2691,9 +2690,6 @@ namespace remoteInstStuff {
             error = "Remote returned 0 games. Check sdmc:/switch/CyberFoil/remote_debug.log";
         }
 
-        std::sort(items.begin(), items.end(), [](const RemoteItem& a, const RemoteItem& b) {
-            return inst::util::ignoreCaseCompare(a.name, b.name);
-        });
         return items;
     }
 

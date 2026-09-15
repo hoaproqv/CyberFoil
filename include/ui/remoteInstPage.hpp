@@ -50,14 +50,13 @@ namespace inst::ui {
         private:
             enum class BrowseSortMode {
                 Rank = 0,
-                ShopOrder = 1,
+                Shop = 1,
                 NameAsc = 2,
                 NameDesc = 3,
                 DateDesc = 4,
                 DateAsc = 5,
                 SizeDesc = 6,
                 SizeAsc = 7,
-                TitleId = 8,
                 Default = 0
             };
             std::vector<remoteInstStuff::RemoteSection> remoteSections;
