@@ -138,6 +138,14 @@ namespace {
         return origin;
     }
 
+    std::string ToLower(std::string s)
+    {
+        std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return s;
+    }
+
     int HexNibble(char c)
     {
         if (c >= '0' && c <= '9')
@@ -1429,38 +1437,6 @@ namespace {
                     if (section.contains(sk) && section[sk].is_array()) {
                         sectionItems = section[sk];
                         break;
-                    }
-                }
-
-                std::string sectionUrl;
-                static const char* secUrlKeys[] = {"url", "items_url", "itemsUrl", "path", "href", "link"};
-                for (const char* suk : secUrlKeys) {
-                    if (section.contains(suk) && section[suk].is_string()) {
-                        std::string u = TrimAscii(section[suk].get<std::string>());
-                        if (!u.empty()) {
-                            sectionUrl = BuildFullUrl(baseUrl, u);
-                            break;
-                        }
-                    }
-                }
-
-                if (sectionItems.empty() && !sectionUrl.empty()) {
-                    FetchResult secFetch = FetchRemoteResponse(sectionUrl, "", "");
-                    std::string secErr;
-                    if (secFetch.responseCode == 200 && ValidateRemoteResponse(secFetch, secErr) && !secFetch.body.empty()) {
-                        try {
-                            nlohmann::json secJson = nlohmann::json::parse(secFetch.body);
-                            if (secJson.is_array()) {
-                                sectionItems = std::move(secJson);
-                            } else if (secJson.is_object()) {
-                                for (const char* sk : secItemKeys) {
-                                    if (secJson.contains(sk) && secJson[sk].is_array()) {
-                                        sectionItems = std::move(secJson[sk]);
-                                        break;
-                                    }
-                                }
-                            }
-                        } catch (...) {}
                     }
                 }
 
