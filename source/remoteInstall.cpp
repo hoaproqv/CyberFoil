@@ -304,7 +304,7 @@ namespace {
             hauthHeader,
             uauthHeader,
             "Accept: */*",
-            "Connection: keep-alive"
+            "Connection: close"
         };
 
         return headers;
@@ -1683,10 +1683,10 @@ namespace remoteInstStuff {
     };
 
     namespace {
-        constexpr long kRemoteRequestTimeoutMs = 45000L;
-        constexpr long kRemoteConnectTimeoutMs = 8000L;
-        constexpr long kRemoteLowSpeedLimit = 1024L;
-        constexpr long kRemoteLowSpeedTime = 20L;
+        constexpr long kRemoteRequestTimeoutMs = 120000L;
+        constexpr long kRemoteConnectTimeoutMs = 25000L;
+        constexpr long kRemoteLowSpeedLimit = 0L;
+        constexpr long kRemoteLowSpeedTime = 0L;
         constexpr int kRemoteFetchMaxAttempts = 2;
 
         bool IsRetriableHttpCode(long responseCode)
@@ -1755,17 +1755,23 @@ namespace remoteInstStuff {
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
-            curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+            curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+            curl_easy_setopt(curl, CURLOPT_TCP_KEEPALIVE, 1L);
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+            curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
             curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
             const std::string userAgent = inst::config::remoteLegacyMode ? std::string() : inst::curl::getUserAgent();
-            curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent.c_str());
+            if (!userAgent.empty()) {
+                curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent.c_str());
+            }
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteToString);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.body);
             curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, timeoutMs);
             curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, connectTimeoutMs);
-            curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, kRemoteLowSpeedLimit);
-            curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, kRemoteLowSpeedTime);
+            if (kRemoteLowSpeedLimit > 0 && kRemoteLowSpeedTime > 0) {
+                curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, kRemoteLowSpeedLimit);
+                curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, kRemoteLowSpeedTime);
+            }
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
 
             RemoteFetchProgressContext progressCtx{};
@@ -2925,31 +2931,45 @@ namespace remoteInstStuff {
         std::unordered_set<std::string> seenManifestUrls;
         seenManifestUrls.insert(baseUrl);
 
-        std::string activeCatalogUrl = baseUrl;
-        FetchResult fetch = FetchRemoteResponse(activeCatalogUrl, user, pass, progressCb);
-        bool validInitial = ValidateRemoteResponse(fetch, error);
+        std::vector<std::string> candidateUrls;
+        const bool hasJsonExt = (baseUrl.size() >= 5 && baseUrl.substr(baseUrl.size() - 5) == ".json");
+        if (hasJsonExt) {
+            candidateUrls.push_back(baseUrl);
+        } else if (inst::config::remoteLegacyMode) {
+            // In Tinfoil Legacy Mode, shops typically serve the catalog at /index.json
+            candidateUrls.push_back(baseUrl + "/index.json");
+            candidateUrls.push_back(baseUrl + "/");
+            candidateUrls.push_back(baseUrl + "/shop.json");
+            candidateUrls.push_back(baseUrl + "/locations.json");
+        } else {
+            candidateUrls.push_back(baseUrl + "/");
+            candidateUrls.push_back(baseUrl + "/index.json");
+            candidateUrls.push_back(baseUrl + "/shop.json");
+            candidateUrls.push_back(baseUrl + "/locations.json");
+        }
 
-        // If root endpoint returns 404 or empty body, probe candidate catalog paths
-        if (fetch.responseCode == 404 || (validInitial && fetch.body.empty())) {
-            static const char* candidatePaths[] = {
-                "/index.json",
-                "/shop.json",
-                "/locations.json"
-            };
-            for (const char* cp : candidatePaths) {
-                std::string probeUrl = baseUrl + cp;
-                LogRemoteDebug("FetchRemote: probing candidate catalog endpoint: " + probeUrl);
-                FetchResult probeFetch = FetchRemoteResponse(probeUrl, user, pass, nullptr, 6000L, 4000L, 1);
-                std::string probeErr;
-                if (probeFetch.responseCode == 200 && ValidateRemoteResponse(probeFetch, probeErr) && !probeFetch.body.empty()) {
-                    fetch = std::move(probeFetch);
-                    activeCatalogUrl = probeUrl;
-                    error.clear();
-                    seenManifestUrls.insert(probeUrl);
-                    validInitial = true;
-                    LogRemoteDebug("FetchRemote: candidate endpoint succeeded: " + probeUrl);
-                    break;
-                }
+        FetchResult fetch;
+        std::string activeCatalogUrl;
+        bool validInitial = false;
+
+        for (const auto& tryUrl : candidateUrls) {
+            LogRemoteDebug("FetchRemote: trying catalog URL: " + tryUrl);
+            seenManifestUrls.insert(tryUrl);
+            std::string tryErr;
+            FetchResult tryFetch = FetchRemoteResponse(tryUrl, user, pass, progressCb);
+            if (ValidateRemoteResponse(tryFetch, tryErr) && !tryFetch.body.empty()) {
+                fetch = std::move(tryFetch);
+                activeCatalogUrl = tryUrl;
+                error.clear();
+                validInitial = true;
+                LogRemoteDebug("FetchRemote: successfully fetched catalog from: " + tryUrl + " (bytes=" + std::to_string(fetch.body.size()) + ")");
+                break;
+            } else {
+                LogRemoteDebug("FetchRemote: attempt failed for " + tryUrl + ": " + tryErr + " (code=" + std::to_string(tryFetch.responseCode) + ", curl=" + std::to_string(tryFetch.curlCode) + ")");
+                if (!tryErr.empty())
+                    error = tryErr;
+                else if (!tryFetch.error.empty())
+                    error = tryFetch.error;
             }
         }
 
