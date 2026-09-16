@@ -1854,10 +1854,31 @@ namespace remoteInstStuff {
             return false;
         }
         if (fetch.responseCode == 401 || fetch.responseCode == 403) {
-            if (!inst::util::HasLegacyAuthSupport()) {
+            std::string serverMsg;
+            try {
+                auto j = nlohmann::json::parse(fetch.body);
+                if (j.is_object()) {
+                    for (const char* key : {"error", "message", "msg", "detail", "motd", "notice", "reason", "description"}) {
+                        if (j.contains(key) && j[key].is_string()) {
+                            serverMsg = TrimAscii(j[key].get<std::string>());
+                            if (!serverMsg.empty()) break;
+                        }
+                    }
+                }
+            } catch (...) {
+                if (fetch.body.size() < 500 && !ContainsHtml(fetch.body)) {
+                    std::string clean = fetch.body;
+                    clean.erase(std::remove(clean.begin(), clean.end(), '\r'), clean.end());
+                    clean.erase(std::remove(clean.begin(), clean.end(), '\n'), clean.end());
+                    serverMsg = TrimAscii(clean);
+                }
+            }
+            if (!serverMsg.empty()) {
+                error = serverMsg;
+            } else if (!inst::util::HasLegacyAuthSupport()) {
                 error = "Remote requires legacy HAUTH/UAUTH signing, but this build does not support it.";
             } else {
-                error = "Remote requires authentication. Check credentials or enable public Remote.";
+                error = "Remote requires authentication (HTTP " + std::to_string(fetch.responseCode) + "). ID máy chưa được đăng ký hoặc không có quyền truy cập.";
             }
             LogRemoteDebug("ValidateRemoteResponse: auth error=" + error);
             return false;
@@ -2857,7 +2878,29 @@ namespace remoteInstStuff {
             }
 
             if (items.empty()) {
-                error = "Remote catalog returned 0 games. Top keys: [" + keysSummary + "]. See sdmc:/switch/CyberFoil/remote_debug.log";
+                static const std::vector<std::string> kMsgKeys = {
+                    "error", "message", "msg", "detail", "motd", "notice", "reason", "description", "status"
+                };
+                for (const auto& mk : kMsgKeys) {
+                    if (remote.contains(mk)) {
+                        if (remote[mk].is_string()) {
+                            const std::string val = TrimAscii(remote[mk].get<std::string>());
+                            if (!val.empty() && val != "0" && val != "null" && val != "false" && val != "ok" && val != "success") {
+                                error = val;
+                                break;
+                            }
+                        } else if (remote[mk].is_object() && remote[mk].contains("message") && remote[mk]["message"].is_string()) {
+                            const std::string val = TrimAscii(remote[mk]["message"].get<std::string>());
+                            if (!val.empty()) {
+                                error = val;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (error.empty()) {
+                    error = "Remote catalog returned 0 games. Top keys: [" + keysSummary + "]. See sdmc:/switch/CyberFoil/remote_debug.log";
+                }
                 LogRemoteDebug("CollectRemoteItemsFromJson: " + error);
                 return false;
             }
@@ -2992,7 +3035,23 @@ namespace remoteInstStuff {
         }
 
         if (items.empty() && error.empty()) {
-            error = "Remote returned 0 games. Check sdmc:/switch/CyberFoil/remote_debug.log";
+            try {
+                auto j = nlohmann::json::parse(fetch.body);
+                if (j.is_object()) {
+                    for (const char* key : {"error", "message", "msg", "detail", "motd", "notice", "reason", "description"}) {
+                        if (j.contains(key) && j[key].is_string()) {
+                            std::string val = TrimAscii(j[key].get<std::string>());
+                            if (!val.empty() && val != "0" && val != "null" && val != "false" && val != "ok" && val != "success") {
+                                error = val;
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (...) {}
+            if (error.empty()) {
+                error = "Remote returned 0 games. Check sdmc:/switch/CyberFoil/remote_debug.log";
+            }
         }
 
         return items;
