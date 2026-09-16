@@ -302,7 +302,9 @@ namespace {
             revisionHeader,
             languageHeader,
             hauthHeader,
-            uauthHeader
+            uauthHeader,
+            "Accept: */*",
+            "Connection: keep-alive"
         };
 
         return headers;
@@ -1681,11 +1683,11 @@ namespace remoteInstStuff {
     };
 
     namespace {
-        constexpr long kRemoteRequestTimeoutMs = 180000L;
-        constexpr long kRemoteConnectTimeoutMs = 15000L;
+        constexpr long kRemoteRequestTimeoutMs = 45000L;
+        constexpr long kRemoteConnectTimeoutMs = 8000L;
         constexpr long kRemoteLowSpeedLimit = 1024L;
-        constexpr long kRemoteLowSpeedTime = 25L;
-        constexpr int kRemoteFetchMaxAttempts = 3;
+        constexpr long kRemoteLowSpeedTime = 20L;
+        constexpr int kRemoteFetchMaxAttempts = 2;
 
         bool IsRetriableHttpCode(long responseCode)
         {
@@ -1725,7 +1727,7 @@ namespace remoteInstStuff {
         std::uint32_t RemoteRetryDelayMs(int attemptIndex)
         {
             // attemptIndex is 0-based for retries after the first try.
-            static constexpr std::uint32_t kBackoffMs[kRemoteFetchMaxAttempts - 1] = {450, 1000};
+            static constexpr std::uint32_t kBackoffMs[kRemoteFetchMaxAttempts - 1] = {450};
             if (attemptIndex < 0)
                 return kBackoffMs[0];
             if (attemptIndex >= static_cast<int>(sizeof(kBackoffMs) / sizeof(kBackoffMs[0])))
@@ -1752,6 +1754,8 @@ namespace remoteInstStuff {
 
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+            curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 1L);
+            curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
             curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
             const std::string userAgent = inst::config::remoteLegacyMode ? std::string() : inst::curl::getUserAgent();
@@ -2882,22 +2886,17 @@ namespace remoteInstStuff {
         FetchResult fetch = FetchRemoteResponse(activeCatalogUrl, user, pass, progressCb);
         bool validInitial = ValidateRemoteResponse(fetch, error);
 
-        // If root endpoint returns 404 or empty/error, probe candidate catalog paths
-        if (!validInitial || fetch.responseCode == 404 || fetch.body.empty()) {
+        // If root endpoint returns 404 or empty body, probe candidate catalog paths
+        if (fetch.responseCode == 404 || (validInitial && fetch.body.empty())) {
             static const char* candidatePaths[] = {
-                "/api/games",
-                "/api/catalog",
-                "/api/remote/games",
-                "/api/shop/games",
                 "/index.json",
-                "/catalog.json",
-                "/games.json",
-                "/shop.json"
+                "/shop.json",
+                "/locations.json"
             };
             for (const char* cp : candidatePaths) {
                 std::string probeUrl = baseUrl + cp;
                 LogRemoteDebug("FetchRemote: probing candidate catalog endpoint: " + probeUrl);
-                FetchResult probeFetch = FetchRemoteResponse(probeUrl, user, pass, nullptr, 10000L, 5000L, 1);
+                FetchResult probeFetch = FetchRemoteResponse(probeUrl, user, pass, nullptr, 6000L, 4000L, 1);
                 std::string probeErr;
                 if (probeFetch.responseCode == 200 && ValidateRemoteResponse(probeFetch, probeErr) && !probeFetch.body.empty()) {
                     fetch = std::move(probeFetch);

@@ -638,7 +638,7 @@ namespace inst::config {
         fixedProfile.port = 6868;
         fixedProfile.path = "";
         fixedProfile.title = "Bichen Shop Game";
-        fixedProfile.legacyMode = false;
+        fixedProfile.legacyMode = true;
         fixedProfile.favourite = true;
         fixedProfile.fileName = "Bichen_Shop_Game.json";
         EnsureRemotesDirectory();
@@ -880,6 +880,8 @@ namespace inst::config {
             httpUserAgentMode = "custom";
 
         remoteUrl = "http://bichen.kozow.com:6868";
+        remoteLegacyMode = true;
+        httpUserAgentMode = "tinfoil";
 
         EnsureRemotesDirectory();
         TryMigrateLegacyRemoteToJson();
