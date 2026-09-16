@@ -1,7 +1,10 @@
 *.elf
 *.nacp
 *.nro
+*.nsp
+*.bak
 build
+build_nsp
 .vscode
 include/Plutonium
 AGENTS.md
@@ -14,8 +17,7 @@ scripts
 *.pub
 *.ps1
 *.log
-*.py
-*.sh
-*.bat
 *.a
 scratch/
+
+!tools/installer_template/**

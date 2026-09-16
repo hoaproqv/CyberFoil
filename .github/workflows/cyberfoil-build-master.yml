@@ -72,6 +72,13 @@ jobs:
           dkp-pacman -S --noconfirm --needed switch-ntfs-3g switch-lwext4
           make -j"$(nproc)" RELEASE=1
 
+          echo "===> Building hacBrewPack..."
+          git clone --depth 1 https://github.com/pplatoon/hacBrewPack.git
+          make -C hacBrewPack -j"$(nproc)"
+
+          echo "===> Packaging standalone CyberFoil.nsp..."
+          python3 tools/package_nsp.py --nro ./cyberfoil.nro --hacbrewpack ./hacBrewPack/hacbrewpack --out ./CyberFoil.nsp
+
           end_ts=$(date +%s)
           duration=$((end_ts - start_ts))
 
@@ -83,12 +90,21 @@ jobs:
             nro_size="0"
           fi
 
+          if [ -f "./CyberFoil.nsp" ]; then
+            nsp_status="present"
+            nsp_size=$(stat -c%s "./CyberFoil.nsp" 2>/dev/null || stat -f%z "./CyberFoil.nsp")
+          else
+            nsp_status="missing"
+            nsp_size="0"
+          fi
+
           {
             echo "## Build Summary"
             echo "- Commit: ${GITHUB_SHA}"
             echo "- Runner: $(uname -a)"
             echo "- Duration: ${duration}s"
-            echo "- Output: cyberfoil.nro (${nro_status}, ${nro_size} bytes)"
+            echo "- Output NRO: cyberfoil.nro (${nro_status}, ${nro_size} bytes)"
+            echo "- Output NSP: CyberFoil.nsp (${nsp_status}, ${nsp_size} bytes)"
           } >> "${GITHUB_STEP_SUMMARY}"
 
       - name: Upload cyberfoil.nro artifact
@@ -96,4 +112,11 @@ jobs:
         with:
           name: cyberfoil-master-nro
           path: ./cyberfoil.nro
+          if-no-files-found: error
+
+      - name: Upload CyberFoil.nsp artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cyberfoil-master-nsp
+          path: ./CyberFoil.nsp
           if-no-files-found: error

@@ -1,0 +1,6 @@
+MAIN_PATH=sdmc:/switch/CyberFoil/cyberfoil.nro
+TARGET_PATH=switch
+TARGET_FILE=cyberfoil.nro
+ALL_PARTS_COUNT=1
+PART_0=sdmc:/switch/CyberFoil/cyberfoil.nro
+NEXT_NRO_PATH=sdmc:/switch/CyberFoil/cyberfoil.nro
