@@ -1495,9 +1495,11 @@ namespace remoteInstStuff {
     };
 
     namespace {
-        constexpr long kRemoteRequestTimeoutMs = 30000L;
-        constexpr long kRemoteConnectTimeoutMs = 10000L;
-        constexpr int kRemoteFetchMaxAttempts = 4;
+        constexpr long kRemoteRequestTimeoutMs = 180000L;
+        constexpr long kRemoteConnectTimeoutMs = 15000L;
+        constexpr long kRemoteLowSpeedLimit = 1024L;
+        constexpr long kRemoteLowSpeedTime = 25L;
+        constexpr int kRemoteFetchMaxAttempts = 3;
 
         bool IsRetriableHttpCode(long responseCode)
         {
@@ -1537,7 +1539,7 @@ namespace remoteInstStuff {
         std::uint32_t RemoteRetryDelayMs(int attemptIndex)
         {
             // attemptIndex is 0-based for retries after the first try.
-            static constexpr std::uint32_t kBackoffMs[kRemoteFetchMaxAttempts - 1] = {450, 1000, 1800};
+            static constexpr std::uint32_t kBackoffMs[kRemoteFetchMaxAttempts - 1] = {450, 1000};
             if (attemptIndex < 0)
                 return kBackoffMs[0];
             if (attemptIndex >= static_cast<int>(sizeof(kBackoffMs) / sizeof(kBackoffMs[0])))
@@ -1546,11 +1548,15 @@ namespace remoteInstStuff {
         }
     }
 
-    FetchResult FetchRemoteResponse(const std::string& url, const std::string& user, const std::string& pass, const RemoteFetchProgressCallback& progressCb = RemoteFetchProgressCallback())
+    FetchResult FetchRemoteResponse(const std::string& url, const std::string& user, const std::string& pass,
+                                   const RemoteFetchProgressCallback& progressCb = RemoteFetchProgressCallback(),
+                                   long timeoutMs = kRemoteRequestTimeoutMs,
+                                   long connectTimeoutMs = kRemoteConnectTimeoutMs,
+                                   int maxAttempts = kRemoteFetchMaxAttempts)
     {
         FetchResult lastResult;
 
-        for (int attempt = 0; attempt < kRemoteFetchMaxAttempts; attempt++) {
+        for (int attempt = 0; attempt < maxAttempts; attempt++) {
             FetchResult result;
             CURL* curl = curl_easy_init();
             if (!curl) {
@@ -1565,8 +1571,10 @@ namespace remoteInstStuff {
             curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent.c_str());
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteToString);
             curl_easy_setopt(curl, CURLOPT_WRITEDATA, &result.body);
-            curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, kRemoteRequestTimeoutMs);
-            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, kRemoteConnectTimeoutMs);
+            curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, timeoutMs);
+            curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, connectTimeoutMs);
+            curl_easy_setopt(curl, CURLOPT_LOW_SPEED_LIMIT, kRemoteLowSpeedLimit);
+            curl_easy_setopt(curl, CURLOPT_LOW_SPEED_TIME, kRemoteLowSpeedTime);
             curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
 
             RemoteFetchProgressContext progressCtx{};
@@ -2720,7 +2728,8 @@ namespace remoteInstStuff {
 
         auto trySectionsPath = [&](const std::string& apiPrefix) -> bool {
             std::string sectionsUrl = baseUrl + apiPrefix + "/sections";
-            FetchResult fetch = FetchRemoteResponse(sectionsUrl, user, pass, progressCb);
+            // Fast speculative probe: 5s connect timeout, 8s total timeout, 1 attempt only (no retries)
+            FetchResult fetch = FetchRemoteResponse(sectionsUrl, user, pass, nullptr, 8000L, 5000L, 1);
             if (fetch.responseCode != 200)
                 return false;
 
@@ -3191,7 +3200,8 @@ namespace remoteInstStuff {
         if (baseUrl.empty())
             return "";
 
-        FetchResult fetch = FetchRemoteResponse(baseUrl, user, pass);
+        // Fast probe for MOTD: 8s timeout, 5s connect, 1 attempt
+        FetchResult fetch = FetchRemoteResponse(baseUrl, user, pass, nullptr, 8000L, 5000L, 1);
         if (fetch.responseCode == 401 || fetch.responseCode == 403)
             return "";
         if (!fetch.error.empty())

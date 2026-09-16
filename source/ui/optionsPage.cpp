@@ -272,14 +272,8 @@ namespace inst::ui {
         this->infoRect = Rectangle::New(0, 75, 1280, 60, infoColor);
         this->botRect = Rectangle::New(0, 660, 1280, 60, botColor);
         this->sideNavRect = Rectangle::New(0, 136, 300, 523, inst::config::oledMode ? COLOR("#FFFFFF18") : COLOR("#141210B0"));
-        if (inst::config::gayMode) {
-            this->titleImage = Image::New(-113, -8, "romfs:/images/logo.png");
-            this->appVersionText = TextBlock::New(367, 29, "v" + inst::config::appVersion + (inst::config::appGitMeta.empty() ? "" : ("\n" + inst::config::appGitMeta)), 22);
-        }
-        else {
-            this->titleImage = Image::New(0, -8, "romfs:/images/logo.png");
-            this->appVersionText = TextBlock::New(480, 29, "v" + inst::config::appVersion + (inst::config::appGitMeta.empty() ? "" : ("\n" + inst::config::appGitMeta)), 22);
-        }
+        this->titleImage = Image::New(20, -8, "romfs:/images/logo.png");
+        this->appVersionText = TextBlock::New(430, 29, "v" + inst::config::appVersion + (inst::config::appGitMeta.empty() ? "" : ("\n" + inst::config::appGitMeta)), 22);
         this->appVersionText->SetColor(COLOR("#FFFFFFFF"));
         this->timeText = TextBlock::New(0, 18, "--:--", 22);
         this->timeText->SetColor(COLOR("#FFFFFFFF"));
@@ -1078,44 +1072,9 @@ namespace inst::ui {
                     this->refreshOptions();
                     break;
                 case 5:
-                    if (inst::config::gayMode) {
-                        inst::config::gayMode = false;
-                        mainApp->mainPage->awooImage->SetVisible(true);
-                        mainApp->instpage->awooImage->SetVisible(true);
-                        mainApp->instpage->titleImage->SetX(0);
-                        mainApp->instpage->appVersionText->SetX(480);
-                        mainApp->mainPage->titleImage->SetX(0);
-                        mainApp->mainPage->appVersionText->SetX(480);
-                        mainApp->netinstPage->titleImage->SetX(0);
-                        mainApp->netinstPage->appVersionText->SetX(480);
-                        mainApp->remoteinstPage->titleImage->SetX(0);
-                        mainApp->remoteinstPage->appVersionText->SetX(480);
-                        mainApp->optionspage->titleImage->SetX(0);
-                        mainApp->optionspage->appVersionText->SetX(480);
-                        mainApp->sdinstPage->titleImage->SetX(0);
-                        mainApp->sdinstPage->appVersionText->SetX(480);
-                        mainApp->usbinstPage->titleImage->SetX(0);
-                        mainApp->usbinstPage->appVersionText->SetX(480);
-                    }
-                    else {
-                        inst::config::gayMode = true;
-                        mainApp->mainPage->awooImage->SetVisible(false);
-                        mainApp->instpage->awooImage->SetVisible(false);
-                        mainApp->instpage->titleImage->SetX(-113);
-                        mainApp->instpage->appVersionText->SetX(367);
-                        mainApp->mainPage->titleImage->SetX(-113);
-                        mainApp->mainPage->appVersionText->SetX(367);
-                        mainApp->netinstPage->titleImage->SetX(-113);
-                        mainApp->netinstPage->appVersionText->SetX(367);
-                        mainApp->remoteinstPage->titleImage->SetX(-113);
-                        mainApp->remoteinstPage->appVersionText->SetX(367);
-                        mainApp->optionspage->titleImage->SetX(-113);
-                        mainApp->optionspage->appVersionText->SetX(367);
-                        mainApp->sdinstPage->titleImage->SetX(-113);
-                        mainApp->sdinstPage->appVersionText->SetX(367);
-                        mainApp->usbinstPage->titleImage->SetX(-113);
-                        mainApp->usbinstPage->appVersionText->SetX(367);
-                    }
+                    inst::config::gayMode = !inst::config::gayMode;
+                    mainApp->mainPage->awooImage->SetVisible(!inst::config::gayMode);
+                    mainApp->instpage->awooImage->SetVisible(!inst::config::gayMode);
                     inst::config::setConfig();
                     this->refreshOptions();
                     break;
