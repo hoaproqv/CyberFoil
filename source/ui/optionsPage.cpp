@@ -503,20 +503,16 @@ namespace inst::ui {
         }
 
         if (this->selectedSection == 1) {
-            std::vector<inst::config::RemoteProfile> remotes = inst::config::LoadRemotes();
             std::string dbVersion = inst::offline::dbupdate::GetInstalledVersion();
             if (dbVersion.empty())
                 dbVersion = "not installed";
             else
                 dbVersion = inst::util::shortenString(dbVersion, 24, false);
-            const std::string activeLabel = inst::util::shortenString(ActiveRemoteLabel(remotes), 38, false);
-            addItem("Remotes: " + activeLabel + " (" + std::to_string(remotes.size()) + " saved)", false, false);
-            addItem("Add new Remote", false, false);
             const std::string uaMode = inst::config::remoteLegacyMode ? "tinfoil" : inst::config::httpUserAgentMode;
             addItem("User-Agent profile: " + GetUserAgentProfileLabel(uaMode), false, false);
             auto items = this->menu->GetItems();
-            if (inst::config::remoteLegacyMode && items.size() > 3 && items[3] != nullptr)
-                items[3]->SetColor(COLOR("#FFFFFF88"));
+            if (inst::config::remoteLegacyMode && !items.empty() && items[0] != nullptr)
+                items[0]->SetColor(COLOR("#FFFFFF88"));
             const std::string consoleUid = inst::util::ComputeUidFromMmcCid();
             const std::string shortUid = consoleUid.size() >= 8 ? consoleUid.substr(0, 8) : consoleUid;
             addItem("Tinfoil Mode [ID: " + shortUid + "]", true, inst::config::remoteLegacyMode);
@@ -1030,7 +1026,7 @@ namespace inst::ui {
                 if ((selectedIndex < 0) || (selectedIndex >= static_cast<int>(sizeof(kGeneralMap) / sizeof(kGeneralMap[0])))) return;
                 selectedIndex = kGeneralMap[selectedIndex];
             } else if (this->selectedSection == 1) {
-                static const int kRemoteMap[] = {20, 21, 25, 26, 12, 13, 27, 24, 19, 23, 22};
+                static const int kRemoteMap[] = {25, 26, 12, 13, 27, 24, 19, 23, 22};
                 if ((selectedIndex < 0) || (selectedIndex >= static_cast<int>(sizeof(kRemoteMap) / sizeof(kRemoteMap[0])))) return;
                 selectedIndex = kRemoteMap[selectedIndex];
             } else {

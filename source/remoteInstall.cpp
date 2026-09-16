@@ -104,6 +104,10 @@ namespace {
             return url;
         if (url.rfind("http://", 0) != 0 && url.rfind("https://", 0) != 0)
             url = "http://" + url;
+        auto portPos = url.find(":68688");
+        if (portPos != std::string::npos) {
+            url.replace(portPos, 6, ":6868");
+        }
         if (!url.empty() && url.back() == '/')
             url.pop_back();
         return url;
@@ -1011,6 +1015,169 @@ namespace {
         return value.substr(start, (end - start) + 1);
     }
 
+    std::string UpdateUrlQueryParam(const std::string& url, const std::string& key, const std::string& value)
+    {
+        std::string base = url;
+        std::string fragment;
+        auto fragPos = base.find('#');
+        if (fragPos != std::string::npos) {
+            fragment = base.substr(fragPos);
+            base = base.substr(0, fragPos);
+        }
+
+        auto qPos = base.find('?');
+        if (qPos == std::string::npos) {
+            return base + "?" + key + "=" + value + fragment;
+        }
+
+        std::string pathPart = base.substr(0, qPos);
+        std::string queryPart = base.substr(qPos + 1);
+
+        std::string newQuery;
+        bool replaced = false;
+        std::size_t start = 0;
+        while (start < queryPart.size()) {
+            std::size_t nextAmp = queryPart.find('&', start);
+            std::string token = (nextAmp == std::string::npos) ? queryPart.substr(start) : queryPart.substr(start, nextAmp - start);
+            auto eqPos = token.find('=');
+            std::string k = (eqPos == std::string::npos) ? token : token.substr(0, eqPos);
+            if (k == key) {
+                if (!newQuery.empty()) newQuery += "&";
+                newQuery += key + "=" + value;
+                replaced = true;
+            } else if (!token.empty()) {
+                if (!newQuery.empty()) newQuery += "&";
+                newQuery += token;
+            }
+            if (nextAmp == std::string::npos)
+                break;
+            start = nextAmp + 1;
+        }
+
+        if (!replaced) {
+            if (!newQuery.empty()) newQuery += "&";
+            newQuery += key + "=" + value;
+        }
+
+        return pathPart + "?" + newQuery + fragment;
+    }
+
+    std::string DetectNextPageUrl(const nlohmann::json& json, const std::string& currentUrl, int currentPageIndex)
+    {
+        if (!json.is_object())
+            return "";
+
+        static const char* urlKeys[] = {
+            "next", "next_page_url", "nextPageUrl", "next_url", "nextUrl",
+            "next_page_link", "nextLink"
+        };
+        for (const char* k : urlKeys) {
+            if (json.contains(k) && json[k].is_string()) {
+                std::string raw = TrimAscii(json[k].get<std::string>());
+                if (!raw.empty() && raw != "null" && raw != "0" && raw != "false") {
+                    return BuildFullUrl(currentUrl, raw);
+                }
+            }
+        }
+
+        static const char* containerKeys[] = {"links", "pagination", "paging", "_links", "meta"};
+        for (const char* ck : containerKeys) {
+            if (json.contains(ck) && json[ck].is_object()) {
+                const auto& c = json[ck];
+                for (const char* k : urlKeys) {
+                    if (c.contains(k) && c[k].is_string()) {
+                        std::string raw = TrimAscii(c[k].get<std::string>());
+                        if (!raw.empty() && raw != "null" && raw != "0" && raw != "false")
+                            return BuildFullUrl(currentUrl, raw);
+                    }
+                }
+                if (c.contains("next") && c["next"].is_object() && c["next"].contains("href") && c["next"]["href"].is_string()) {
+                    std::string raw = TrimAscii(c["next"]["href"].get<std::string>());
+                    if (!raw.empty())
+                        return BuildFullUrl(currentUrl, raw);
+                }
+            }
+        }
+
+        static const char* pageNumKeys[] = {"next_page", "nextPage", "next_page_number", "nextPageNumber"};
+        for (const char* k : pageNumKeys) {
+            if (json.contains(k)) {
+                int nextP = 0;
+                if (json[k].is_number_integer())
+                    nextP = json[k].get<int>();
+                else if (json[k].is_string()) {
+                    try { nextP = std::stoi(json[k].get<std::string>()); } catch (...) {}
+                }
+                if (nextP > currentPageIndex)
+                    return UpdateUrlQueryParam(currentUrl, "page", std::to_string(nextP));
+            }
+        }
+
+        bool hasMore = false;
+        if (json.contains("has_more") && json["has_more"].is_boolean())
+            hasMore = json["has_more"].get<bool>();
+        else if (json.contains("hasMore") && json["hasMore"].is_boolean())
+            hasMore = json["hasMore"].get<bool>();
+        else if (json.contains("pagination") && json["pagination"].is_object()) {
+            if (json["pagination"].contains("has_more") && json["pagination"]["has_more"].is_boolean())
+                hasMore = json["pagination"]["has_more"].get<bool>();
+            else if (json["pagination"].contains("hasMore") && json["pagination"]["hasMore"].is_boolean())
+                hasMore = json["pagination"]["hasMore"].get<bool>();
+        }
+        if (hasMore) {
+            return UpdateUrlQueryParam(currentUrl, "page", std::to_string(currentPageIndex + 1));
+        }
+
+        int totalPages = 0;
+        int curPage = currentPageIndex;
+        static const char* totalPagesKeys[] = {"total_pages", "totalPages", "last_page", "lastPage", "pages", "page_count", "pageCount"};
+        for (const char* k : totalPagesKeys) {
+            if (json.contains(k)) {
+                if (json[k].is_number_integer())
+                    totalPages = json[k].get<int>();
+                else if (json[k].is_string()) {
+                    try { totalPages = std::stoi(json[k].get<std::string>()); } catch (...) {}
+                }
+                if (totalPages > 0)
+                    break;
+            }
+        }
+        if (totalPages == 0 && json.contains("pagination") && json["pagination"].is_object()) {
+            for (const char* k : totalPagesKeys) {
+                if (json["pagination"].contains(k) && json["pagination"][k].is_number_integer()) {
+                    totalPages = json["pagination"][k].get<int>();
+                    break;
+                }
+            }
+        }
+
+        static const char* curPageKeys[] = {"page", "current_page", "currentPage"};
+        for (const char* k : curPageKeys) {
+            if (json.contains(k) && json[k].is_number_integer()) {
+                curPage = json[k].get<int>();
+                break;
+            }
+        }
+        if (totalPages > 0 && curPage < totalPages) {
+            return UpdateUrlQueryParam(currentUrl, "page", std::to_string(curPage + 1));
+        }
+
+        long long offset = -1;
+        long long limit = -1;
+        long long total = -1;
+        if (json.contains("offset") && json["offset"].is_number_integer()) offset = json["offset"].get<long long>();
+        if (json.contains("limit") && json["limit"].is_number_integer()) limit = json["limit"].get<long long>();
+        if (json.contains("total") && json["total"].is_number_integer()) total = json["total"].get<long long>();
+        else if (json.contains("count") && json["count"].is_number_integer() && offset >= 0) total = json["count"].get<long long>();
+
+        if (offset >= 0 && limit > 0 && total > 0 && (offset + limit) < total) {
+            std::string updated = UpdateUrlQueryParam(currentUrl, "offset", std::to_string(offset + limit));
+            return UpdateUrlQueryParam(updated, "limit", std::to_string(limit));
+        }
+
+        return "";
+    }
+
     bool TryExtractHexTitleIdToken(const std::string& token, std::string& outHex)
     {
         std::string text = TrimAscii(token);
@@ -1252,12 +1419,55 @@ namespace {
             }
 
             for (const auto& section : remote["sections"]) {
-                if (!section.contains("items") || !section["items"].is_array())
-                    continue;
                 remoteInstStuff::RemoteSection parsed;
                 parsed.id = section.value("id", "all");
                 parsed.title = section.value("title", "All");
-                for (const auto& entry : section["items"]) {
+
+                nlohmann::json sectionItems = nlohmann::json::array();
+                static const char* secItemKeys[] = {"items", "games", "files", "data", "list", "catalog", "content", "records", "results", "downloads"};
+                for (const char* sk : secItemKeys) {
+                    if (section.contains(sk) && section[sk].is_array()) {
+                        sectionItems = section[sk];
+                        break;
+                    }
+                }
+
+                std::string sectionUrl;
+                static const char* secUrlKeys[] = {"url", "items_url", "itemsUrl", "path", "href", "link"};
+                for (const char* suk : secUrlKeys) {
+                    if (section.contains(suk) && section[suk].is_string()) {
+                        std::string u = TrimAscii(section[suk].get<std::string>());
+                        if (!u.empty()) {
+                            sectionUrl = BuildFullUrl(baseUrl, u);
+                            break;
+                        }
+                    }
+                }
+
+                if (sectionItems.empty() && !sectionUrl.empty()) {
+                    FetchResult secFetch = FetchRemoteResponse(sectionUrl, "", "");
+                    std::string secErr;
+                    if (secFetch.responseCode == 200 && ValidateRemoteResponse(secFetch, secErr) && !secFetch.body.empty()) {
+                        try {
+                            nlohmann::json secJson = nlohmann::json::parse(secFetch.body);
+                            if (secJson.is_array()) {
+                                sectionItems = std::move(secJson);
+                            } else if (secJson.is_object()) {
+                                for (const char* sk : secItemKeys) {
+                                    if (secJson.contains(sk) && secJson[sk].is_array()) {
+                                        sectionItems = std::move(secJson[sk]);
+                                        break;
+                                    }
+                                }
+                            }
+                        } catch (...) {}
+                    }
+                }
+
+                if (sectionItems.empty())
+                    continue;
+
+                for (const auto& entry : sectionItems) {
                     if (!entry.contains("url"))
                         continue;
                     std::string url = entry["url"].get<std::string>();
@@ -1567,6 +1777,7 @@ namespace remoteInstStuff {
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
             curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+            curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, "");
             const std::string userAgent = inst::config::remoteLegacyMode ? std::string() : inst::curl::getUserAgent();
             curl_easy_setopt(curl, CURLOPT_USERAGENT, userAgent.c_str());
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteToString);
@@ -2029,6 +2240,15 @@ namespace remoteInstStuff {
             if (!files.is_object())
                 return false;
 
+            static const char* innerArrayKeys[] = {
+                "data", "items", "games", "files", "list", "results", "catalog", "content", "records", "downloads", "titles"
+            };
+            for (const char* iak : innerArrayKeys) {
+                if (files.contains(iak) && files[iak].is_array()) {
+                    return AppendLegacyFilesFromJson(files[iak], baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error);
+                }
+            }
+
             bool any = false;
             for (auto it = files.begin(); it != files.end(); ++it) {
                 const std::string key = it.key();
@@ -2392,6 +2612,10 @@ namespace remoteInstStuff {
                     continue;
                 }
 
+                if (ToLower(host) != "bichen.kozow.com") {
+                    continue;
+                }
+
                 inst::config::RemoteProfile profile;
                 profile.protocol = protocol;
                 profile.host = host;
@@ -2519,6 +2743,8 @@ namespace remoteInstStuff {
                 "files", "paths", "games", "updates", "dlc", "items",
                 "entries", "packages", "data", "list", "content",
                 "recommended", "recommends", "featured", "popular",
+                "catalog", "library", "results", "titles", "records",
+                "rows", "products", "downloads",
                 "nsps", "xci", "xcis", "nsz", "tfl"
             };
             for (const auto& k : kFileCandidateKeys) {
@@ -2530,6 +2756,22 @@ namespace remoteInstStuff {
                     } else if (!error.empty()) {
                         LogRemoteDebug("CollectRemoteItemsFromJson: key '" + k + "' returned error: " + error);
                         return false;
+                    }
+                }
+            }
+
+            static const std::vector<std::string> kWrapperKeys = {"data", "response", "result", "payload", "body"};
+            for (const auto& wk : kWrapperKeys) {
+                if (remote.contains(wk) && remote[wk].is_object()) {
+                    const auto& sub = remote[wk];
+                    for (const auto& k : kFileCandidateKeys) {
+                        if (sub.contains(k)) {
+                            LogRemoteDebug("CollectRemoteItemsFromJson: checking wrapper '" + wk + "." + k + "'");
+                            if (AppendLegacyFilesFromJson(sub[k], baseUrl, googleApiKey, requestHeaders, items, seenItemUrls, error)) {
+                                handled = true;
+                                LogRemoteDebug("CollectRemoteItemsFromJson: wrapper '" + wk + "." + k + "' added items, total now: " + std::to_string(items.size()));
+                            }
+                        }
                     }
                 }
             }
@@ -2656,17 +2898,52 @@ namespace remoteInstStuff {
             return items;
         }
 
-        FetchResult fetch = FetchRemoteResponse(baseUrl, user, pass, progressCb);
-        if (!ValidateRemoteResponse(fetch, error))
-            return items;
-
         std::unordered_set<std::string> seenItemUrls;
         std::unordered_set<std::string> seenManifestUrls;
         seenManifestUrls.insert(baseUrl);
 
+        std::string activeCatalogUrl = baseUrl;
+        FetchResult fetch = FetchRemoteResponse(activeCatalogUrl, user, pass, progressCb);
+        bool validInitial = ValidateRemoteResponse(fetch, error);
+
+        // If root endpoint returns 404 or empty/error, probe candidate catalog paths
+        if (!validInitial || fetch.responseCode == 404 || fetch.body.empty()) {
+            static const char* candidatePaths[] = {
+                "/api/games",
+                "/api/catalog",
+                "/api/remote/games",
+                "/api/shop/games",
+                "/index.json",
+                "/catalog.json",
+                "/games.json",
+                "/shop.json"
+            };
+            for (const char* cp : candidatePaths) {
+                std::string probeUrl = baseUrl + cp;
+                LogRemoteDebug("FetchRemote: probing candidate catalog endpoint: " + probeUrl);
+                FetchResult probeFetch = FetchRemoteResponse(probeUrl, user, pass, nullptr, 10000L, 5000L, 1);
+                std::string probeErr;
+                if (probeFetch.responseCode == 200 && ValidateRemoteResponse(probeFetch, probeErr) && !probeFetch.body.empty()) {
+                    fetch = std::move(probeFetch);
+                    activeCatalogUrl = probeUrl;
+                    error.clear();
+                    seenManifestUrls.insert(probeUrl);
+                    validInitial = true;
+                    LogRemoteDebug("FetchRemote: candidate endpoint succeeded: " + probeUrl);
+                    break;
+                }
+            }
+        }
+
+        if (!validInitial && items.empty())
+            return items;
+
+        nlohmann::json firstJson;
+        bool hasJson = false;
         try {
-            nlohmann::json remote = nlohmann::json::parse(fetch.body);
-            CollectRemoteItemsFromJson(remote, baseUrl, user, pass, items, seenItemUrls, seenManifestUrls,
+            firstJson = nlohmann::json::parse(fetch.body);
+            hasJson = true;
+            CollectRemoteItemsFromJson(firstJson, activeCatalogUrl, user, pass, items, seenItemUrls, seenManifestUrls,
                 error, progressCb, "", GetUrlOrigin(baseUrl));
         }
         catch (const std::exception& e) {
@@ -2677,9 +2954,65 @@ namespace remoteInstStuff {
         }
 
         if (items.empty()) {
-            if (AppendHtmlDirectoryListing(fetch.body, baseUrl, {}, items, seenItemUrls, seenManifestUrls, user, pass, progressCb)) {
+            if (AppendHtmlDirectoryListing(fetch.body, activeCatalogUrl, {}, items, seenItemUrls, seenManifestUrls, user, pass, progressCb)) {
                 error.clear();
                 LogRemoteDebug("FetchRemote: root parsed as HTML directory listing, total items: " + std::to_string(items.size()));
+            }
+        }
+
+        // Automatic Pagination Loop to fetch all games across all pages
+        if (hasJson && firstJson.is_object()) {
+            std::string currentUrl = activeCatalogUrl;
+            nlohmann::json currentJson = firstJson;
+            int currentPage = 1;
+            constexpr int kMaxPages = 1000;
+
+            while (currentPage < kMaxPages) {
+                std::string nextPageUrl = DetectNextPageUrl(currentJson, currentUrl, currentPage);
+                if (nextPageUrl.empty())
+                    break;
+                if (!seenManifestUrls.insert(nextPageUrl).second) {
+                    LogRemoteDebug("FetchRemote: pagination reached already-visited URL: " + nextPageUrl);
+                    break;
+                }
+
+                LogRemoteDebug("FetchRemote: fetching next page " + std::to_string(currentPage + 1) + ": " + nextPageUrl);
+                FetchResult pageFetch = FetchRemoteResponse(nextPageUrl, user, pass, progressCb);
+                if (pageFetch.responseCode != 200 || pageFetch.body.empty()) {
+                    LogRemoteDebug("FetchRemote: page " + std::to_string(currentPage + 1) + " returned HTTP " + std::to_string(pageFetch.responseCode));
+                    break;
+                }
+
+                std::string pageErr;
+                if (!ValidateRemoteResponse(pageFetch, pageErr)) {
+                    LogRemoteDebug("FetchRemote: page " + std::to_string(currentPage + 1) + " validation failed: " + pageErr);
+                    break;
+                }
+
+                try {
+                    nlohmann::json nextJson = nlohmann::json::parse(pageFetch.body);
+                    const size_t prevCount = items.size();
+                    std::string subErr;
+                    CollectRemoteItemsFromJson(nextJson, nextPageUrl, user, pass, items, seenItemUrls, seenManifestUrls,
+                        subErr, progressCb, "", GetUrlOrigin(nextPageUrl));
+
+                    if (items.size() <= prevCount) {
+                        LogRemoteDebug("FetchRemote: no new items from page " + std::to_string(currentPage + 1) + ", stopping pagination");
+                        break;
+                    }
+
+                    currentUrl = nextPageUrl;
+                    currentJson = std::move(nextJson);
+                    currentPage++;
+
+                    if (progressCb) {
+                        const std::uint64_t count = static_cast<std::uint64_t>(items.size());
+                        progressCb(count, count + 50);
+                    }
+                } catch (...) {
+                    LogRemoteDebug("FetchRemote: JSON parse exception on page " + std::to_string(currentPage + 1));
+                    break;
+                }
             }
         }
 
@@ -2751,6 +3084,12 @@ namespace remoteInstStuff {
         if (trySectionsPath("/api/remote"))
             return sections;
         if (trySectionsPath("/api/shop"))
+            return sections;
+        if (trySectionsPath("/api/v1"))
+            return sections;
+        if (trySectionsPath("/api"))
+            return sections;
+        if (trySectionsPath(""))
             return sections;
         if (tryLegacyFallback())
             return sections;

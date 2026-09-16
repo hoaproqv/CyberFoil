@@ -7,10 +7,22 @@
 #include <switch.h>
 
 namespace inst::util {
+    static std::string gCustomUid = "BAD1BB5900000000000000000000000000000000000000000000000000000000";
+
+    void SetCustomUid(const std::string& customUid)
+    {
+        if (customUid.empty())
+            return;
+        std::string padded = customUid;
+        if (padded.size() < 64)
+            padded.append(64 - padded.size(), '0');
+        gCustomUid = padded;
+    }
+
     std::string ComputeUidFromMmcCid()
     {
         static std::once_flag once;
-        static std::string uid(64, '0');
+        static std::string uid = gCustomUid;
         std::call_once(once, []() {
             FsDeviceOperator d = {};
             if (R_FAILED(fsOpenDeviceOperator(&d)))

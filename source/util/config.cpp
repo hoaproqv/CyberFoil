@@ -12,7 +12,7 @@ namespace inst::config {
     std::string gAuthKey;
     std::string lastNetUrl;
     std::string offlineDbManifestUrl;
-    std::string remoteUrl;
+    std::string remoteUrl = "http://bichen.kozow.com:6868";
     std::string remoteUser;
     std::string remotePass;
     std::string httpUserAgentMode;
@@ -108,6 +108,14 @@ namespace inst::config {
             long parsed = std::strtol(trimmed.c_str(), &end, 10);
             if (end == trimmed.c_str() || (end != nullptr && *end != '\0'))
                 return false;
+            if (parsed == 68688) {
+                parsed = 6868;
+            } else if (parsed > 65535) {
+                if (trimmed.rfind("6868", 0) == 0 && trimmed.size() == 5)
+                    parsed = 6868;
+                else
+                    return false;
+            }
             if (parsed <= 0 || parsed > 65535)
                 return false;
             out = static_cast<int>(parsed);
@@ -624,41 +632,19 @@ namespace inst::config {
 
     std::vector<RemoteProfile> LoadRemotes()
     {
-        std::vector<RemoteProfile> remotes;
-        if (!EnsureRemotesDirectory())
-            return remotes;
-
-        std::vector<std::string> seenKeys;
-        const std::filesystem::path sourceDirs[] = {
-            std::filesystem::path(inst::config::remotesDir),
-            std::filesystem::path(inst::config::legacyShopsDir)
-        };
-
-        for (const auto& sourceDir : sourceDirs) {
-            std::error_code ec;
-            if (!std::filesystem::exists(sourceDir, ec) || !std::filesystem::is_directory(sourceDir, ec))
-                continue;
-
-            for (const auto& entry : std::filesystem::directory_iterator(sourceDir, ec)) {
-                if (ec)
-                    break;
-                if (!entry.is_regular_file())
-                    continue;
-
-                RemoteProfile parsed;
-                if (!ParseRemoteFile(entry.path(), parsed))
-                    continue;
-
-                const std::string dedupKey = RemoteDedupKey(parsed);
-                if (std::find(seenKeys.begin(), seenKeys.end(), dedupKey) != seenKeys.end())
-                    continue;
-                seenKeys.push_back(dedupKey);
-                remotes.push_back(std::move(parsed));
-            }
-        }
-
-        SortRemoteProfiles(remotes);
-        return remotes;
+        RemoteProfile fixedProfile;
+        fixedProfile.protocol = "http";
+        fixedProfile.host = "bichen.kozow.com";
+        fixedProfile.port = 6868;
+        fixedProfile.path = "";
+        fixedProfile.title = "Bichen Shop Game";
+        fixedProfile.legacyMode = false;
+        fixedProfile.favourite = true;
+        fixedProfile.fileName = "Bichen_Shop_Game.json";
+        EnsureRemotesDirectory();
+        std::string saveErr;
+        SaveRemote(fixedProfile, &saveErr);
+        return { fixedProfile };
     }
 
     bool SaveRemote(const RemoteProfile& remote, std::string* error)
@@ -729,10 +715,7 @@ namespace inst::config {
 
     bool SetActiveRemote(const RemoteProfile& remote, bool writeConfig)
     {
-        std::string url = BuildRemoteUrl(remote);
-        if (url.empty())
-            return false;
-        inst::config::remoteUrl = url;
+        inst::config::remoteUrl = "http://bichen.kozow.com:6868";
         inst::config::remoteUser = remote.username;
         inst::config::remotePass = remote.password;
         inst::config::remoteLegacyMode = remote.legacyMode;
@@ -896,23 +879,7 @@ namespace inst::config {
         if (!hasHttpUserAgentModeKey && !Trim(httpUserAgent).empty())
             httpUserAgentMode = "custom";
 
-        if (!Trim(remoteUrl).empty()) {
-            std::string protocol;
-            std::string host;
-            std::string path;
-            int port = DefaultPortForProtocol("http");
-            if (ParseRemoteUrl(remoteUrl, protocol, host, port, path)) {
-                RemoteProfile normalizedRemote;
-                normalizedRemote.protocol = protocol;
-                normalizedRemote.host = host;
-                normalizedRemote.path = path;
-                normalizedRemote.port = port;
-                const std::string normalizedRemoteUrl = BuildRemoteUrl(normalizedRemote);
-                if (normalizedRemoteUrl != remoteUrl)
-                    needsConfigRewrite = true;
-                remoteUrl = normalizedRemoteUrl;
-            }
-        }
+        remoteUrl = "http://bichen.kozow.com:6868";
 
         EnsureRemotesDirectory();
         TryMigrateLegacyRemoteToJson();

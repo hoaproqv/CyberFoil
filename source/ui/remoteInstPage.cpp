@@ -1505,8 +1505,8 @@ namespace inst::ui {
         CenterTextX(this->pageInfoText);
         std::string rightInfo;
         if (!this->searchQuery.empty()) {
-            std::string query = inst::util::shortenString(this->searchQuery, 16, true);
-            rightInfo = "Tìm: " + query;
+            std::string query = inst::util::shortenString(this->searchQuery, 14, true);
+            rightInfo = "Tìm (" + std::to_string(this->visibleItems.size()) + "): " + query;
         }
         if (this->isAllSection()) {
             if (!rightInfo.empty())
@@ -3318,34 +3318,56 @@ namespace inst::ui {
         const auto& items = this->getCurrentItems();
         if (!this->searchQuery.empty()) {
             const std::string normalizedQuery = NormalizeSearchKey(this->searchQuery);
-            for (const auto& item : items) {
-                std::string name = NormalizeSearchKey(item.name);
-                if (name.find(normalizedQuery) != std::string::npos)
-                    this->visibleItems.push_back(item);
-            }
+            std::unordered_set<std::string> seenKeys;
 
-            if (this->visibleItems.empty()) {
-                std::unordered_set<std::string> seenUrls;
-                for (const auto& section : this->remoteSections) {
-                    if (section.id == "all" || section.id == "games") {
-                        for (const auto& item : section.items) {
-                            if (seenUrls.insert(item.url).second) {
-                                if (NormalizeSearchKey(item.name).find(normalizedQuery) != std::string::npos)
-                                    this->visibleItems.push_back(item);
-                            }
+            auto matchesItem = [&](const remoteInstStuff::RemoteItem& item) -> bool {
+                if (NormalizeSearchKey(item.name).find(normalizedQuery) != std::string::npos)
+                    return true;
+                if (item.hasTitleId && item.titleId != 0) {
+                    char tidBuf[32];
+                    std::snprintf(tidBuf, sizeof(tidBuf), "%016llx", static_cast<unsigned long long>(item.titleId));
+                    if (std::string(tidBuf).find(normalizedQuery) != std::string::npos)
+                        return true;
+                }
+                if (item.hasAppId && !item.appId.empty()) {
+                    std::string appLower = item.appId;
+                    std::transform(appLower.begin(), appLower.end(), appLower.begin(), [](unsigned char c) { return std::tolower(c); });
+                    if (appLower.find(normalizedQuery) != std::string::npos)
+                        return true;
+                }
+                return false;
+            };
+
+            // First scan "all" or "games" section if present
+            for (const auto& section : this->remoteSections) {
+                if (section.id == "all" || section.id == "games") {
+                    for (const auto& item : section.items) {
+                        std::string key = item.url.empty() ? ("tid:" + std::to_string(item.titleId)) : item.url;
+                        if (seenKeys.insert(key).second && matchesItem(item)) {
+                            this->visibleItems.push_back(item);
                         }
                     }
                 }
-                if (this->visibleItems.empty()) {
-                    for (const auto& section : this->remoteSections) {
-                        if (section.id == "installed" || section.id == "saves" || section.id == "save" || section.id == "cheats")
-                            continue;
-                        for (const auto& item : section.items) {
-                            if (seenUrls.insert(item.url).second) {
-                                if (NormalizeSearchKey(item.name).find(normalizedQuery) != std::string::npos)
-                                    this->visibleItems.push_back(item);
-                            }
-                        }
+            }
+
+            // Also search across all other sections so nothing in the library is missed
+            for (const auto& section : this->remoteSections) {
+                if (section.id == "all" || section.id == "games" || section.id == "installed" || section.id == "saves" || section.id == "save")
+                    continue;
+                for (const auto& item : section.items) {
+                    std::string key = item.url.empty() ? ("tid:" + std::to_string(item.titleId)) : item.url;
+                    if (seenKeys.insert(key).second && matchesItem(item)) {
+                        this->visibleItems.push_back(item);
+                    }
+                }
+            }
+
+            // Fallback: if no matches across catalog sections, check current items
+            if (this->visibleItems.empty()) {
+                for (const auto& item : items) {
+                    std::string key = item.url.empty() ? ("tid:" + std::to_string(item.titleId)) : item.url;
+                    if (seenKeys.insert(key).second && matchesItem(item)) {
+                        this->visibleItems.push_back(item);
                     }
                 }
             }
@@ -3926,18 +3948,8 @@ namespace inst::ui {
 
         std::string remoteUrl = inst::config::remoteUrl;
         if (remoteUrl.empty()) {
-            std::vector<inst::config::RemoteProfile> remotes = inst::config::LoadRemotes();
-            if (!remotes.empty() && inst::config::SetActiveRemote(remotes.front(), true))
-                remoteUrl = inst::config::remoteUrl;
-        }
-        if (remoteUrl.empty()) {
-            remoteUrl = inst::util::softwareKeyboard("options.remote.url_hint"_lang, "http://", 200);
-            if (remoteUrl.empty()) {
-                mainApp->LoadLayout(mainApp->mainPage);
-                return;
-            }
+            remoteUrl = "http://bichen.kozow.com:6868";
             inst::config::remoteUrl = remoteUrl;
-            inst::config::setConfig();
         }
         this->activeRemoteUrl = remoteUrl;
 

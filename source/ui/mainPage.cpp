@@ -529,16 +529,8 @@ namespace inst::ui {
 
         std::string remoteUrl = inst::config::remoteUrl;
         if (remoteUrl.empty()) {
-            std::vector<inst::config::RemoteProfile> remotes = inst::config::LoadRemotes();
-            if (!remotes.empty() && inst::config::SetActiveRemote(remotes.front(), true))
-                remoteUrl = inst::config::remoteUrl;
-        }
-        if (remoteUrl.empty()) {
-            remoteUrl = inst::util::softwareKeyboard("options.remote.url_hint"_lang, "http://", 200);
-            if (remoteUrl.empty())
-                return;
+            remoteUrl = "http://bichen.kozow.com:6868";
             inst::config::remoteUrl = remoteUrl;
-            inst::config::setConfig();
         }
 
         std::string backupNote = inst::util::softwareKeyboard("Backup note (required)", "", 120);
